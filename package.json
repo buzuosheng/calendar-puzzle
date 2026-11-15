@@ -1,0 +1,22 @@
+{
+  "name": "calendar-puzzle",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "English-only daily calendar polyomino puzzle — a pure static frontend.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  }
+}
