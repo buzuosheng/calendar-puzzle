@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "English-only daily calendar polyomino puzzle — a pure static frontend.",
+  "description": "Daily calendar polyomino puzzle — a pure static frontend with English and Simplified Chinese UI.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

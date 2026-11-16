@@ -1,5 +1,7 @@
 # Calendar Puzzle — Feature Loop
 
+**Status: completed.** This pass implemented the three items that were locked in [REQUIREMENTS.md](REQUIREMENTS.md): a Simplified Chinese locale, a fuller mobile adaptation, and a per-solve share image. Those are now current features in the README and requirements. This file is kept as a record of the pass.
+
 This loop implements the three planned items already locked in [REQUIREMENTS.md](REQUIREMENTS.md): a Simplified Chinese locale, a fuller mobile adaptation, and a per-solve share image. Do not ask the user for product decisions. If something is ambiguous, follow this document and REQUIREMENTS.md, then continue.
 
 ## Rules
@@ -147,3 +149,5 @@ This is not the fixed `/og.png` used for link previews.
 2. `npx tsc --noEmit` is clean and `npm test` passes, including the new locale, layout (if automated), and share-image tests.
 3. README and REQUIREMENTS describe the Chinese locale, mobile layout, and per-solve share image as current features, not as planned work.
 4. Changes are committed on the Mac and have not been pushed or deployed.
+
+Phases 1–3 of this record are complete in `/workspace/calendar-puzzle`. The workspace changes have not been pushed or deployed; committing on the Mac is left to the parent sync.

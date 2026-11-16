@@ -65,8 +65,8 @@
   --radius-sm: 6px;
   --duration: 160ms;
   --ease: ease-out;
-  --font: "IBM Plex Sans", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
-  --font-board: "Iowan Old Style", Palatino, Georgia, serif;
+  --font: "IBM Plex Sans", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --font-board: "Iowan Old Style", Palatino, Georgia, "Songti SC", "STSong", "Noto Serif SC", serif;
   --shadow: 0 1px 2px rgba(28, 33, 24, 0.06);
   --shadow-sm: none;
   --board-pad: 16px;
@@ -79,10 +79,14 @@
   --sidebar-gap: 0px;
   --tray-col: 0px;
   --play-gap: 0px;
+  --tray-stack: 0px;
+  --stack-gap: 0px;
+  --tray-min: 0px;
+  /* Keep this formula in sync with src/layout.ts. */
   --cell: min(
     var(--cell-max),
     calc((100vw - 2 * var(--page-x) - var(--sidebar-width) - var(--sidebar-gap) - var(--tray-col) - var(--play-gap) - var(--board-pad) * 2) / var(--board-cols)),
-    calc((100dvh - var(--ui-chrome) - var(--board-pad) * 2) / var(--board-rows))
+    calc((100dvh - var(--ui-chrome) - var(--tray-stack) - var(--board-pad) * 2) / var(--board-rows))
   );
   --tray-cell: min(20px, calc((100vw - 64px) / 16));
   color-scheme: light;
@@ -197,6 +201,52 @@ kbd {
   gap: 8px 12px;
   width: 100%;
   min-width: 0;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.lang-switch {
+  display: inline-flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-card);
+  overflow: hidden;
+}
+
+.lang-btn {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  background: transparent;
+  color: var(--color-muted-foreground);
+  min-height: 32px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.lang-btn[aria-pressed="true"] {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.lang-btn:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+  z-index: 1;
 }
 
 h1 {
@@ -429,6 +479,7 @@ h1 {
   letter-spacing: 0;
   cursor: pointer;
   box-shadow: none;
+  touch-action: manipulation;
 }
 
 .btn:hover {
@@ -787,6 +838,30 @@ h1 {
   font-size: 0.85rem;
 }
 
+.share-actions {
+  display: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.solved-banner.visible .share-actions {
+  display: flex;
+}
+
+.is-preview .share-actions {
+  display: none;
+}
+
+.share-actions .btn {
+  width: auto;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  font-size: 0.8rem;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1064,57 +1139,55 @@ h1 {
   }
 }
 
-@media (max-width: 400px) {
+/* One-screen phones and narrow tablets. Tokens stay in sync with src/layout.ts. */
+@media (max-width: 899px) {
   :root {
-    --board-pad: 12px;
-    --cell-max: 38px;
-    --page-x: 12px;
-  }
-}
-
-@media (min-width: 600px) and (max-width: 899px) and (max-height: 500px) {
-  :root {
-    --ui-chrome: 154px;
-    --sidebar-width: 0px;
-    --sidebar-gap: 0px;
-    --page-x: 12px;
-    --board-pad: 12px;
+    --ui-chrome: 296px;
   }
 
   html,
-  body {
+  body,
+  #app {
     height: 100dvh;
     max-height: 100dvh;
-    overflow-x: hidden;
-    overflow-y: auto;
+    overflow: hidden;
+  }
+
+  body::before,
+  body::after {
+    display: none;
+  }
+
+  #app {
+    align-items: stretch;
   }
 
   .app {
-    padding: 6px 0;
+    width: calc(100% - 2 * var(--page-x));
     max-width: calc(100% - 2 * var(--page-x));
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0 auto;
+    padding: 6px 0;
+    grid-template-areas:
+      "controls"
+      "status"
+      "play";
+    grid-template-rows: auto auto minmax(0, 1fr);
+    align-content: stretch;
+  }
+
+  .play-area {
+    min-height: 0;
   }
 
   .controls {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: end;
-    gap: 6px 10px;
+    gap: 6px;
     padding: 0 0 6px;
   }
 
   .title-block {
-    flex-direction: row;
-    flex-wrap: nowrap;
-    align-items: center;
-    gap: 4px 10px;
-    width: auto;
-    flex: 0 1 auto;
-  }
-
-  .title-date-row {
-    width: auto;
-    flex: 0 1 auto;
+    gap: 4px;
   }
 
   h1,
@@ -1122,12 +1195,23 @@ h1 {
     font-size: 1rem;
   }
 
+  .lang-btn {
+    min-height: 36px;
+    padding: 0 8px;
+  }
+
+  #today-btn {
+    min-height: 32px;
+    padding: 4px 10px;
+  }
+
   .date-fields {
-    display: grid;
-    grid-template-columns: minmax(5.2rem, 6.5rem) minmax(3.4rem, 4.5rem) minmax(5.8rem, 7.5rem);
-    width: auto;
-    flex: 0 1 auto;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.75fr) minmax(0, 1.35fr);
     gap: 6px;
+  }
+
+  .date-fields .field:nth-child(3) {
+    grid-column: auto;
   }
 
   .date-fields .field {
@@ -1137,6 +1221,195 @@ h1 {
 
   .date-fields .field select {
     font-size: 16px;
+    min-height: 44px;
+  }
+
+  .stats {
+    min-height: 0;
+  }
+
+  .stat {
+    min-width: 3.2rem;
+    padding: 0 8px;
+  }
+
+  .stat-label {
+    font-size: 0.7rem;
+  }
+
+  .stat-value {
+    font-size: 0.95rem;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: stretch;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+  }
+
+  .actions .btn {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    padding: 0 6px;
+    font-size: 0.8rem;
+  }
+
+  #start-today-btn,
+  #reset-btn {
+    grid-column: auto;
+  }
+
+  .is-preview #start-today-btn {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .status-slot {
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    margin-top: 0;
+    margin-bottom: 4px;
+  }
+
+  .howto,
+  .solved-banner p {
+    font-size: 0.75rem;
+    line-height: 1.3;
+  }
+
+  .btn,
+  .field select,
+  .lang-btn {
+    touch-action: manipulation;
+  }
+}
+
+@media (max-width: 599px) {
+  :root {
+    --page-x: 12px;
+    --board-pad: 10px;
+    --play-gap: 0px;
+    --stack-gap: 8px;
+    --cell-max: 56px;
+    --ui-chrome: 296px;
+    --tray-heading: 18px;
+    --tray-min: 94px;
+    --tray-stack: 120px;
+    --tray-cell: min(15px, calc((100vw - 2 * var(--page-x) - 24px) / 16));
+  }
+
+  .play-area {
+    display: flex;
+    flex-direction: column;
+    gap: var(--stack-gap);
+    width: 100%;
+    max-width: 100%;
+    min-height: 0;
+    height: 100%;
+  }
+
+  .board-wrap {
+    flex: 0 0 auto;
+    margin: 0 auto;
+  }
+
+  .tray-panel {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+  }
+
+  .tray-panel h2 {
+    font-size: 0.85rem;
+    margin: 0 0 4px;
+    line-height: 14px;
+  }
+
+  .tray {
+    min-height: var(--tray-min);
+    padding: 8px;
+    gap: 8px;
+  }
+}
+
+@media (min-width: 600px) and (max-width: 899px) and (max-height: 500px) {
+  :root {
+    --ui-chrome: 120px;
+    --tray-stack: 0px;
+    --sidebar-width: 0px;
+    --sidebar-gap: 0px;
+    --page-x: 10px;
+    --board-pad: 8px;
+    --play-gap: 12px;
+    --cell-max: 56px;
+    --tray-col: 120px;
+  }
+
+  html,
+  body {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .app {
+    padding: 4px 0;
+    max-width: calc(100% - 2 * var(--page-x));
+    grid-template-columns: minmax(0, 1fr) minmax(9.5rem, 13rem);
+    grid-template-areas:
+      "controls status"
+      "play play";
+    grid-template-rows: auto minmax(0, 1fr);
+    column-gap: 8px;
+    row-gap: 4px;
+  }
+
+  .controls {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .title-block {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 4px 8px;
+    width: auto;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .title-row,
+  .title-date-row {
+    width: auto;
+    flex: 0 1 auto;
+  }
+
+  h1,
+  .date-heading {
+    font-size: 0.95rem;
+  }
+
+  .lang-btn {
+    min-height: 36px;
+  }
+
+  .date-fields {
+    display: grid;
+    grid-template-columns: minmax(5.2rem, 6.5rem) minmax(3.4rem, 4.5rem) minmax(5.8rem, 7.5rem);
+    width: auto;
+    flex: 0 1 auto;
+    gap: 6px;
   }
 
   .date-fields .field:nth-child(3) {
@@ -1153,29 +1426,21 @@ h1 {
     padding: 0 8px;
   }
 
-  .stat-label {
-    font-size: 0.7rem;
-  }
-
-  .stat-value {
-    font-size: 0.95rem;
-  }
-
   .actions {
     display: flex;
     flex-wrap: nowrap;
     justify-content: flex-end;
     align-items: center;
     width: auto;
-    flex: 0 0 auto;
+    flex: 1 1 auto;
     min-height: 44px;
     gap: 6px;
   }
 
   .actions .btn {
     width: auto;
-    flex: 0 0 auto;
-    padding: 0 10px;
+    flex: 1 1 0;
+    padding: 0 8px;
   }
 
   #start-today-btn,
@@ -1184,12 +1449,21 @@ h1 {
   }
 
   .status-slot {
-    margin-top: 4px;
+    margin: 0;
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    align-self: stretch;
   }
 
   .howto,
   .solved-banner p {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     line-height: 1.3;
+  }
+
+  .play-area {
+    min-height: 0;
+    height: 100%;
   }
 }

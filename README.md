@@ -8,7 +8,7 @@ Play it online at [puzzle.buzuosheng.tech](https://puzzle.buzuosheng.tech).
 
 This is an original web implementation of the well-known weekday (DOTY-style) calendar puzzle: an 8×7 board with 50 playable cells. It is not an official product of any commercial puzzle brand.
 
-The current UI is English. A Chinese language version, a fuller mobile layout, and a per-solve share image are planned; see [Planned](#planned).
+The UI is available in English and Simplified Chinese. A language switch in the chrome remembers your choice; if you have not chosen, it follows the browser language (`zh*` → Chinese, otherwise English). After a solve you can save or share a card of that attempt. The game is laid out to fit on one screen on phones and on a typical desktop display.
 
 ## How to run
 
@@ -83,13 +83,23 @@ This set is known to have at least one solution for every one of the 366 × 7 = 
 - **Esc** deselects. **Reset** returns every piece to the tray and restarts the timer for the same date.
 - The timer starts on the first successful placement, or the first rotate/flip, after load or reset. It stops when the puzzle is solved.
 
+## Language
+
+A visible **English** / **中文** control switches the entire UI, including board labels, plaques, and messages. The choice is stored in `localStorage` under `calendar-puzzle:lang`. Switching language does not reset the board, timer, or session. Keyboard shortcuts stay `R`, `F`, `H`, `Ctrl`/`⌘`+`Z`, and `Esc` in both locales. The document title and root `lang` attribute follow the active locale; the static Open Graph / Twitter tags stay in English.
+
 ## Layout
 
-On a desktop window (900px and up) the controls sit in a left sidebar (title, date heading and Today, month/day on one row and weekday below, stats, and actions) and the board plus a narrower piece tray sit on the right. The layout is meant to fit on one screen, including a typical 16-inch laptop viewport.
+On a desktop window (900px and up) the controls sit in a left sidebar (title and language switch, date heading and Today, month/day on one row and weekday below, stats, and actions) and the board plus a narrower piece tray sit on the right. The layout is meant to fit on one screen, including a typical 16-inch laptop viewport.
 
-On narrower screens the same controls are compacted at the top. As soon as the width can fit a readable board beside a narrow tray (from about 600px, and in landscape when height is limited), the play area is board | tray. The current portrait-phone layout may still need a little vertical scrolling; a fuller mobile adaptation is planned (see [Planned](#planned)). There is no horizontal page scroll at 375×667 or typical phone widths.
+On narrower screens the same controls — including the language switch, and Share / Save image after a solve — stay available and are compacted at the top. The full UI fits on one screen with no page scrolling at 375×667 and 390×844, in portrait and in landscape. A readable board and the piece tray both stay on screen. Portrait phones stack the tray under the board; from about 600px, and in landscape when height is limited, the play area is board | tray. Buttons and date selects are sized for touch (44px where the layout allows). Drag-and-snap works with a finger; rotate, flip, and the other actions do not depend on hover.
 
-Progress is stored only in `localStorage` under the key prefix `calendar-puzzle:` (the current play session, daily streak, last solved local date, and best time plus hint count per month/day/weekday). A solve counts toward the daily streak only when the puzzle’s month, day, and weekday all match the real local today. Best times are keyed with the weekday (for example `11-15-0`). Older month/day-only keys from the previous 7×7 game are left in place and ignored. There is no account and no backend.
+The board cell size is a CSS `min()` of a maximum size, the width left after chrome and the tray column, and the height left after chrome, the stacked tray (when the tray is below the board), and board padding. Tokens live in `src/style.css` and are documented next to the same formula in `src/layout.ts`.
+
+Progress is stored only in `localStorage` under the key prefix `calendar-puzzle:` (the current play session, language, daily streak, last solved local date, and best time plus hint count per month/day/weekday). A solve counts toward the daily streak only when the puzzle’s month, day, and weekday all match the real local today. Best times are keyed with the weekday (for example `11-15-0`). Older month/day-only keys from the previous 7×7 game are left in place and ignored. There is no account and no backend.
+
+## Share image
+
+After a solve — including when a solved session is restored — the banner offers **Share** and **Save image**. Those actions build a 1080×1350 PNG card in the browser (title, puzzle date, finished board, time, and hint count, in the active locale). **Save image** downloads `calendar-puzzle-<month>-<day>-<weekday>.png`. **Share** uses the Web Share API with that file when the browser can share files, and otherwise falls back to the same download. The card is not generated automatically, is not offered in preview mode, and is separate from the fixed site preview image at `/og.png`.
 
 ## Solver and hint search order
 
@@ -100,14 +110,6 @@ Hints always use the **first** solution found under this fixed order, so the sam
 1. Always cover the lowest-index remaining cell (`index = row * 7 + col`, row-major, top-left first).
 2. Try pieces in the order `V`, `T`, `Z`, `L`, `N`, `P`, `U`, `J`, `S`, `I`.
 3. For each piece, try precomputed placements that cover that cell, in generation order: unique orientations (unflipped then flipped; for each, rotations 0°, 90°, 180°, 270° clockwise, first-seen only), and for each orientation, origins in row-major order.
-
-## Planned
-
-These items are not in the current build. Detailed decisions are locked in [REQUIREMENTS.md](REQUIREMENTS.md).
-
-- **Chinese language version.** Add a complete Simplified Chinese UI (title, rules, buttons, board labels, plaques, and messages) with a visible English / 中文 switch. Remember the choice in `localStorage`. If there is no saved choice, default to the browser language (`zh*` → Chinese, otherwise English).
-- **Mobile adaptation.** Fit the full game on a phone screen in portrait and landscape with no page scrolling at common sizes (including 375×667). Improve touch targets and piece dragging so every control stays usable; do not drop desktop features.
-- **Per-solve share image.** After a solve, generate a card of this attempt (date, finished board, time, and hint count) that the player can save or share. This is separate from the fixed site preview image used for link previews.
 
 ## License
 

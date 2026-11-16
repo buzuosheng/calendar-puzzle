@@ -1,4 +1,13 @@
-import { COLS, ROWS, MONTH_LABELS, WEEKDAY_FULL_LABELS, isUnused, labelFor, dateLabel } from './board';
+import { COLS, ROWS, isUnused, labelFor, dateLabel } from './board';
+import {
+  type Locale,
+  applyDocumentLocale,
+  formatSolveStats,
+  loadLocale,
+  saveLocale,
+  t,
+  weekdayFullLabels,
+} from './i18n';
 import {
   type PieceId,
   ORIENTATIONS,
@@ -9,6 +18,7 @@ import {
 import { roundedPolyominoPath } from './piecePath';
 import { isLegalPlacement } from './placement';
 import { Game, formatTime } from './game';
+import { buildShareCard, downloadShareImage, shareOrDownload } from './shareCard';
 import { loadSession } from './storage';
 import { resolveStart } from './start';
 import { replacePuzzleUrl } from './url';
@@ -37,12 +47,66 @@ export function mountApp(root: HTMLElement): Game {
     previewYesterday: true,
   });
   const game = new Game({ ...start, persist: true });
+  let locale: Locale = loadLocale();
   root.innerHTML = layout();
   const refs = bindRefs(root);
   let drag: DragState | null = null;
   let ghost: HTMLElement | null = null;
   let tick: number | null = null;
   let cellSize = 56;
+
+  const applyStaticCopy = () => {
+    const copy = t(locale);
+    refs.title.textContent = copy.title;
+    refs.todayBtn.textContent = copy.today;
+    refs.startTodayBtn.textContent = copy.startToday;
+    refs.monthLabel.textContent = copy.month;
+    refs.dayLabel.textContent = copy.day;
+    refs.weekdayLabel.textContent = copy.weekday;
+    refs.monthSelect.setAttribute('aria-label', copy.month);
+    refs.daySelect.setAttribute('aria-label', copy.day);
+    refs.weekdaySelect.setAttribute('aria-label', copy.weekday);
+    refs.timeLabel.textContent = copy.time;
+    refs.hintsLabel.textContent = copy.hints;
+    refs.streakLabel.textContent = copy.streak;
+    refs.bestLabel.textContent = copy.best;
+    refs.rotateBtn.textContent = copy.rotate;
+    refs.flipBtn.textContent = copy.flip;
+    refs.hintBtn.textContent = copy.hint;
+    refs.undoBtn.textContent = copy.undo;
+    refs.resetBtn.textContent = copy.reset;
+    refs.playHowTo.innerHTML = copy.playHowToHtml;
+    refs.previewHowTo.innerHTML = copy.previewHowToHtml;
+    refs.solvedTitle.textContent = copy.solved;
+    refs.shareBtn.textContent = copy.share;
+    refs.saveImageBtn.textContent = copy.saveImage;
+    refs.captionDate.textContent = copy.date;
+    refs.captionLeave.textContent = copy.leaveOpen;
+    refs.piecesHeading.textContent = copy.pieces;
+    refs.controls.setAttribute('aria-label', copy.controlsAria);
+    refs.board.setAttribute('aria-label', copy.boardAria);
+    refs.tray.setAttribute('aria-label', copy.trayAria);
+    refs.langSwitch.setAttribute('aria-label', copy.language);
+    refs.langEn.setAttribute('aria-pressed', locale === 'en' ? 'true' : 'false');
+    refs.langZh.setAttribute('aria-pressed', locale === 'zh-Hans' ? 'true' : 'false');
+    const months = copy.months;
+    refs.monthSelect.querySelectorAll('option').forEach((option, i) => {
+      option.textContent = months[i] ?? option.textContent;
+    });
+    const weekdays = weekdayFullLabels(locale);
+    refs.weekdaySelect.querySelectorAll('option').forEach((option, i) => {
+      option.textContent = weekdays[i] ?? option.textContent;
+    });
+    applyDocumentLocale(locale);
+  };
+
+  const setLocale = (next: Locale) => {
+    if (next === locale) return;
+    saveLocale(next);
+    locale = next;
+    applyStaticCopy();
+    afterAction();
+  };
 
   const measure = () => {
     const width = refs.board.clientWidth;
@@ -65,9 +129,9 @@ export function mountApp(root: HTMLElement): Game {
     refs.hints.textContent = preview ? '—' : String(snap.hintsUsed);
     refs.streak.textContent = String(snap.streak);
     refs.best.textContent = snap.best
-      ? `${formatTime(snap.best.timeMs)} · ${snap.best.hintsUsed} hint${snap.best.hintsUsed === 1 ? '' : 's'}`
+      ? formatSolveStats(locale, formatTime(snap.best.timeMs), snap.best.hintsUsed)
       : '—';
-    refs.dateHeading.textContent = dateLabel(game.month, game.day, game.weekday);
+    refs.dateHeading.textContent = dateLabel(game.month, game.day, game.weekday, locale);
   };
 
   const renderBoard = () => {
@@ -81,6 +145,9 @@ export function mountApp(root: HTMLElement): Game {
         (r === date.weekday.r && c === date.weekday.c);
       el.classList.toggle('date-cell', isDate);
       el.classList.remove('preview-valid', 'preview-invalid');
+      if (!el.classList.contains('unused')) {
+        el.textContent = labelFor(r, c, locale);
+      }
     });
   };
 
@@ -102,7 +169,9 @@ export function mountApp(root: HTMLElement): Game {
       el.classList.toggle('solved-lock', game.locked);
       el.setAttribute(
         'aria-label',
-        `${id} piece${piece.location === 'board' ? ' on the board' : ' in the tray'}`,
+        locale === 'zh-Hans'
+          ? `木片 ${id}，${piece.location === 'board' ? '在棋盘上' : '在托盘中'}`
+          : `${id} piece${piece.location === 'board' ? ' on the board' : ' in the tray'}`,
       );
       el.tabIndex = game.locked ? -1 : 0;
       if (piece.location === 'board' && piece.origin) {
@@ -124,8 +193,11 @@ export function mountApp(root: HTMLElement): Game {
     refs.banner.classList.toggle('visible', visible);
     refs.banner.setAttribute('aria-hidden', visible ? 'false' : 'true');
     if (visible) {
-      const hints = game.hintsUsed;
-      refs.bannerBody.textContent = `Time ${formatTime(game.elapsedMs())} · ${hints} hint${hints === 1 ? '' : 's'}`;
+      refs.bannerBody.textContent = formatSolveStats(
+        locale,
+        formatTime(game.elapsedMs()),
+        game.hintsUsed,
+      );
     }
   };
 
@@ -419,47 +491,85 @@ export function mountApp(root: HTMLElement): Game {
     }
   });
 
+  const makeShareCard = () =>
+    buildShareCard({
+      mode: game.mode,
+      solved: game.solved,
+      month: game.month,
+      day: game.day,
+      weekday: game.weekday,
+      pieces: game.pieces,
+      elapsedMs: game.elapsedMs(),
+      hintsUsed: game.hintsUsed,
+      streak: game.streak,
+      locale,
+    });
+
+  refs.shareBtn.addEventListener('click', async () => {
+    const card = await makeShareCard();
+    if (!card) return;
+    await shareOrDownload(card, {
+      title: t(locale).title,
+      text: dateLabel(game.month, game.day, game.weekday, locale),
+    });
+  });
+  refs.saveImageBtn.addEventListener('click', async () => {
+    const card = await makeShareCard();
+    if (!card) return;
+    downloadShareImage(card.blob, card.filename);
+  });
+
+  refs.langEn.addEventListener('click', () => setLocale('en'));
+  refs.langZh.addEventListener('click', () => setLocale('zh-Hans'));
+
   const ro = new ResizeObserver(() => measure());
   ro.observe(refs.boardWrap);
 
   renderBoardSkeleton(refs.board);
   renderBoardPlate(refs.boardWrap);
+  applyStaticCopy();
   afterAction();
   measure();
   return game;
 }
 
 function layout(): string {
-  const months = MONTH_LABELS.map((label, i) => `<option value="${i + 1}">${label}</option>`).join('');
+  const months = t('en').months.map((label, i) => `<option value="${i + 1}">${label}</option>`).join('');
   const days = Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('');
-  const weekdays = WEEKDAY_FULL_LABELS.map((label, i) => `<option value="${i}">${label}</option>`).join('');
+  const weekdays = weekdayFullLabels('en').map((label, i) => `<option value="${i}">${label}</option>`).join('');
   return `
     <div class="app">
       <div class="sidebar">
-      <section class="controls" aria-label="Puzzle controls">
+      <section class="controls" id="controls" aria-label="Puzzle controls">
         <div class="title-block">
-          <h1>Calendar Puzzle</h1>
+          <div class="title-row">
+            <h1 id="app-title">Calendar Puzzle</h1>
+            <div class="lang-switch" id="lang-switch" role="group" aria-label="Language">
+              <button type="button" class="lang-btn" id="lang-en" data-lang="en" aria-pressed="false">English</button>
+              <button type="button" class="lang-btn" id="lang-zh" data-lang="zh-Hans" aria-pressed="false">中文</button>
+            </div>
+          </div>
           <div class="title-date-row">
             <strong id="date-heading" class="date-heading"></strong>
             <button type="button" class="btn secondary" id="today-btn">Today</button>
           </div>
         </div>
         <div class="date-fields">
-          <label class="field">Month
+          <label class="field"><span id="month-label">Month</span>
             <select id="month-select" aria-label="Month">${months}</select>
           </label>
-          <label class="field">Day
+          <label class="field"><span id="day-label">Day</span>
             <select id="day-select" aria-label="Day">${days}</select>
           </label>
-          <label class="field">Weekday
+          <label class="field"><span id="weekday-label">Weekday</span>
             <select id="weekday-select" aria-label="Weekday">${weekdays}</select>
           </label>
         </div>
         <div class="stats">
-          <div class="stat"><span class="stat-label">Time</span><span class="stat-value" id="stat-timer">0:00</span></div>
-          <div class="stat"><span class="stat-label">Hints</span><span class="stat-value" id="stat-hints">0</span></div>
-          <div class="stat"><span class="stat-label">Streak</span><span class="stat-value" id="stat-streak">0</span></div>
-          <div class="stat"><span class="stat-label">Best</span><span class="stat-value" id="stat-best">—</span></div>
+          <div class="stat"><span class="stat-label" id="time-label">Time</span><span class="stat-value" id="stat-timer">0:00</span></div>
+          <div class="stat"><span class="stat-label" id="hints-label">Hints</span><span class="stat-value" id="stat-hints">0</span></div>
+          <div class="stat"><span class="stat-label" id="streak-label">Streak</span><span class="stat-value" id="stat-streak">0</span></div>
+          <div class="stat"><span class="stat-label" id="best-label">Best</span><span class="stat-value" id="stat-best">—</span></div>
         </div>
         <div class="actions">
           <button type="button" class="btn" id="start-today-btn">Start today</button>
@@ -471,27 +581,31 @@ function layout(): string {
         </div>
       </section>
       <div class="status-slot">
-        <p class="howto" data-howto="play">
+        <p class="howto" data-howto="play" id="howto-play">
           Leave the month, day, and weekday uncovered. Drag to place, or use <kbd>R</kbd>, <kbd>F</kbd>, <kbd>H</kbd>, and <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd>.
         </p>
-        <p class="howto" data-howto="preview">
+        <p class="howto" data-howto="preview" id="howto-preview">
           Yesterday's solution. Start today's challenge when you're ready.
         </p>
         <div class="solved-banner" id="solved-banner" aria-hidden="true">
-          <strong>Solved</strong>
+          <strong id="solved-title">Solved</strong>
           <p id="solved-body"></p>
+          <div class="share-actions" id="share-actions">
+            <button type="button" class="btn" id="share-btn">Share</button>
+            <button type="button" class="btn secondary" id="save-image-btn">Save image</button>
+          </div>
         </div>
       </div>
       </div>
       <div class="play-area">
         <div class="board-wrap" id="board-wrap">
           <div class="board" id="board" role="grid" aria-label="Calendar board"></div>
-          <p class="board-caption board-caption-tr">Date</p>
-          <p class="board-caption board-caption-bl">Leave these open</p>
+          <p class="board-caption board-caption-tr" id="caption-date">Date</p>
+          <p class="board-caption board-caption-bl" id="caption-leave">Leave these open</p>
           <div class="board-pieces" id="board-pieces"></div>
         </div>
         <aside class="tray-panel" id="tray-panel">
-          <h2>Pieces</h2>
+          <h2 id="pieces-heading">Pieces</h2>
           <div class="tray" id="tray" aria-label="Piece tray"></div>
         </aside>
       </div>
@@ -507,12 +621,24 @@ function bindRefs(root: HTMLElement) {
   };
   return {
     root,
+    controls: byId<HTMLElement>('controls'),
+    title: byId<HTMLElement>('app-title'),
+    langSwitch: byId<HTMLElement>('lang-switch'),
+    langEn: byId<HTMLButtonElement>('lang-en'),
+    langZh: byId<HTMLButtonElement>('lang-zh'),
+    monthLabel: byId<HTMLElement>('month-label'),
+    dayLabel: byId<HTMLElement>('day-label'),
+    weekdayLabel: byId<HTMLElement>('weekday-label'),
     monthSelect: byId<HTMLSelectElement>('month-select'),
     daySelect: byId<HTMLSelectElement>('day-select'),
     weekdaySelect: byId<HTMLSelectElement>('weekday-select'),
     todayBtn: byId<HTMLButtonElement>('today-btn'),
     startTodayBtn: byId<HTMLButtonElement>('start-today-btn'),
     dateHeading: byId<HTMLElement>('date-heading'),
+    timeLabel: byId<HTMLElement>('time-label'),
+    hintsLabel: byId<HTMLElement>('hints-label'),
+    streakLabel: byId<HTMLElement>('streak-label'),
+    bestLabel: byId<HTMLElement>('best-label'),
     timer: byId<HTMLElement>('stat-timer'),
     hints: byId<HTMLElement>('stat-hints'),
     streak: byId<HTMLElement>('stat-streak'),
@@ -522,6 +648,12 @@ function bindRefs(root: HTMLElement) {
     hintBtn: byId<HTMLButtonElement>('hint-btn'),
     undoBtn: byId<HTMLButtonElement>('undo-btn'),
     resetBtn: byId<HTMLButtonElement>('reset-btn'),
+    playHowTo: byId<HTMLElement>('howto-play'),
+    previewHowTo: byId<HTMLElement>('howto-preview'),
+    solvedTitle: byId<HTMLElement>('solved-title'),
+    captionDate: byId<HTMLElement>('caption-date'),
+    captionLeave: byId<HTMLElement>('caption-leave'),
+    piecesHeading: byId<HTMLElement>('pieces-heading'),
     boardWrap: byId<HTMLElement>('board-wrap'),
     board: byId<HTMLElement>('board'),
     boardPieces: byId<HTMLElement>('board-pieces'),
@@ -529,6 +661,8 @@ function bindRefs(root: HTMLElement) {
     tray: byId<HTMLElement>('tray'),
     banner: byId<HTMLElement>('solved-banner'),
     bannerBody: byId<HTMLElement>('solved-body'),
+    shareBtn: byId<HTMLButtonElement>('share-btn'),
+    saveImageBtn: byId<HTMLButtonElement>('save-image-btn'),
   };
 }
 
@@ -545,7 +679,7 @@ function renderBoardSkeleton(board: HTMLElement) {
         cell.classList.add('unused');
         cell.setAttribute('aria-hidden', 'true');
       } else {
-        cell.textContent = labelFor(r, c);
+        cell.textContent = labelFor(r, c, 'en');
       }
       board.appendChild(cell);
     }

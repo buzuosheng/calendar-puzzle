@@ -1,5 +1,15 @@
 /** 8×7 weekday calendar board: 50 playable cells, 6 unused. */
 
+import {
+  type Locale,
+  EN_MONTH_LABELS,
+  EN_WEEKDAY_LABELS,
+  EN_WEEKDAY_FULL_LABELS,
+  formatDateHeading,
+  monthLabels,
+  weekdayLabels,
+} from './i18n';
+
 export const ROWS = 8;
 export const COLS = 7;
 export const PLAYABLE_CELLS = 50;
@@ -7,34 +17,14 @@ export const COVER_CELLS = 47;
 
 export type Cell = { readonly r: number; readonly c: number };
 
-export const MONTH_LABELS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-] as const;
+/** English month labels; prefer monthLabels(locale) for UI. */
+export const MONTH_LABELS = EN_MONTH_LABELS;
 
-/** Short weekday labels, index-aligned with Date#getDay() (0 = Sunday). */
-export const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+/** Short English weekday labels, index-aligned with Date#getDay() (0 = Sunday). */
+export const WEEKDAY_LABELS = EN_WEEKDAY_LABELS;
 
-/** Full weekday names for the date picker, same index order. */
-export const WEEKDAY_FULL_LABELS = [
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-] as const;
+/** Full English weekday names for the date picker, same index order. */
+export const WEEKDAY_FULL_LABELS = EN_WEEKDAY_FULL_LABELS;
 
 /** Days in each month for the 366-date calendar, including Feb 29. */
 export const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] as const;
@@ -109,16 +99,18 @@ export function weekdayCell(weekday: number): Cell {
   return { r: 7, c: weekday };
 }
 
-export function labelFor(r: number, c: number): string | null {
+export function labelFor(r: number, c: number, locale: Locale = 'en'): string | null {
   if (!isPlayable(r, c)) return null;
-  if (r === 0 && c <= 5) return MONTH_LABELS[c] ?? null;
-  if (r === 1 && c <= 5) return MONTH_LABELS[6 + c] ?? null;
+  const months = monthLabels(locale);
+  const weekdays = weekdayLabels(locale);
+  if (r === 0 && c <= 5) return months[c] ?? null;
+  if (r === 1 && c <= 5) return months[6 + c] ?? null;
   if (r >= 2 && r <= 6) {
     const day = (r - 2) * COLS + c + 1;
     if (day >= 1 && day <= 31) return String(day);
   }
-  if (r === 6 && c >= 3 && c <= 6) return WEEKDAY_LABELS[c - 3] ?? null;
-  if (r === 7 && c >= 4 && c <= 6) return WEEKDAY_LABELS[c] ?? null;
+  if (r === 6 && c >= 3 && c <= 6) return weekdays[c - 3] ?? null;
+  if (r === 7 && c >= 4 && c <= 6) return weekdays[c] ?? null;
   return null;
 }
 
@@ -183,8 +175,11 @@ export function allCalendarPuzzles(): CalendarPuzzle[] {
 }
 
 /** Heading style: short weekday, short month, day — e.g. "Sun, Nov 15". */
-export function dateLabel(month: number, day: number, weekday: number): string {
-  const week = WEEKDAY_LABELS[weekday] ?? '???';
-  const name = MONTH_LABELS[month - 1] ?? '???';
-  return `${week}, ${name} ${day}`;
+export function dateLabel(
+  month: number,
+  day: number,
+  weekday: number,
+  locale: Locale = 'en',
+): string {
+  return formatDateHeading(locale, month, day, weekday);
 }
