@@ -116,6 +116,8 @@ Add a complete Simplified Chinese UI alongside the existing English UI.
   | Date | 日期 |
   | Leave these open | 请留空 |
   | Solved | 已完成 |
+  | Share | 分享 |
+  | Save image | 保存图片 |
   | Jan–Dec | 1月–12月 |
   | Sun–Sat (board) | 日 一 二 三 四 五 六 |
   | Sunday–Saturday (picker) | 星期日–星期六 |
@@ -133,14 +135,27 @@ Add a complete Simplified Chinese UI alongside the existing English UI.
 The current narrow layout is a starting point, not the finished phone experience.
 
 - Fit the full UI on one screen with no vertical or horizontal page scroll at common phone sizes, including 375×667 and 390×844 portrait, and the matching landscape sizes (667×375, 844×390). A readable board and the piece tray must both stay on screen.
-- Keep every feature available: date controls, stats, Start today / Today, rotate, flip, hint, undo, reset, and the language switch once it exists. Do not hide or drop controls on mobile.
+- Keep every feature available: date controls, stats, Start today / Today, rotate, flip, hint, undo, reset, the language switch once it exists, and the share/save-image actions once they exist. Do not hide or drop controls on mobile.
 - Touch-first interaction: drag-and-snap must be reliable with a finger; rotate, flip, and other actions must not depend on hover. Hit targets should be at least 44px where the layout allows.
 - The tray keeps a minimum height when it is empty, as it already does on desktop.
 - The layout may differ from the desktop left sidebar; compactness must not make the chrome feel cramped or the board unreadable.
 
+### Per-solve share image
+
+This is not the fixed `/og.png` used for link previews. After a solve, the game generates a card for this attempt that the player can save or share.
+
+- Generate the image entirely in the browser (canvas). No backend.
+- Offer it on the solved banner, including when a already-solved session is restored. Do not offer it in preview mode, and do not generate or share automatically.
+- The card includes the title, the puzzle date, the player's finished board, the time, and the hint count. Streak is optional and may be included if it fits the layout.
+- Visual style matches the game: plaster background `#E2E5DF`, stamp-red accents `#8A2E2A`, light-maple board and pieces with no wood grain, IBM Plex Sans for chrome and the serif board font on the board.
+- Output a PNG, 1080×1350 (4:5). Filename: `calendar-puzzle-<month>-<day>-<weekday>.png` (for example `calendar-puzzle-11-15-0.png`).
+- **Save image** downloads the PNG. **Share** uses the Web Share API with that file when the browser can share files; otherwise it falls back to the same download. The player always opts in.
+- Card copy follows the active locale, including the locked strings **Share** / **分享** and **Save image** / **保存图片**.
+- Unit tests should cover filename construction, that a solved state produces a PNG of the expected size, and that preview / unsolved states do not generate a card.
+
 ## Out of scope
 
-Accounts, backend, campaign/tutorial level packs, languages beyond English and Simplified Chinese, native apps, generated per-solve share images, online leaderboards, analytics.
+Accounts, backend, campaign/tutorial level packs, languages beyond English and Simplified Chinese, native apps, online leaderboards, analytics.
 
 ## Engineering
 
@@ -173,5 +188,6 @@ When the Planned work is done, these are also true:
 
 7. The UI can be used entirely in English or entirely in Simplified Chinese, with the locked copy above, a working language switch, and the saved or browser-language default.
 8. The full UI fits on one screen with no page scrolling at 375×667 and 390×844 (portrait and landscape), touch dragging works, and no feature is missing on mobile.
+9. After a solve, the player can save or share a generated card of this attempt (date, finished board, time, and hint count). The fixed site preview image is unchanged.
 
 Do not ask the user to make product decisions. If something is ambiguous, pick the option that best matches this document and proceed.

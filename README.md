@@ -8,7 +8,7 @@ Play it online at [puzzle.buzuosheng.tech](https://puzzle.buzuosheng.tech).
 
 This is an original web implementation of the well-known weekday (DOTY-style) calendar puzzle: an 8×7 board with 50 playable cells. It is not an official product of any commercial puzzle brand.
 
-The current UI is English. A Chinese language version and a fuller mobile layout are planned; see [Planned](#planned).
+The current UI is English. A Chinese language version, a fuller mobile layout, and a per-solve share image are planned; see [Planned](#planned).
 
 ## How to run
 
@@ -107,6 +107,7 @@ These items are not in the current build. Detailed decisions are locked in [REQU
 
 - **Chinese language version.** Add a complete Simplified Chinese UI (title, rules, buttons, board labels, plaques, and messages) with a visible English / 中文 switch. Remember the choice in `localStorage`. If there is no saved choice, default to the browser language (`zh*` → Chinese, otherwise English).
 - **Mobile adaptation.** Fit the full game on a phone screen in portrait and landscape with no page scrolling at common sizes (including 375×667). Improve touch targets and piece dragging so every control stays usable; do not drop desktop features.
+- **Per-solve share image.** After a solve, generate a card of this attempt (date, finished board, time, and hint count) that the player can save or share. This is separate from the fixed site preview image used for link previews.
 
 ## License
 
