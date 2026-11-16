@@ -1,7 +1,9 @@
-/** 7×7 DragonFjord calendar board: 43 playable cells, 6 unused. */
+/** 8×7 weekday calendar board: 50 playable cells, 6 unused. */
 
-export const ROWS = 7;
+export const ROWS = 8;
 export const COLS = 7;
+export const PLAYABLE_CELLS = 50;
+export const COVER_CELLS = 47;
 
 export type Cell = { readonly r: number; readonly c: number };
 
@@ -20,17 +22,31 @@ export const MONTH_LABELS = [
   'Dec',
 ] as const;
 
+/** Short weekday labels, index-aligned with Date#getDay() (0 = Sunday). */
+export const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+/** Full weekday names for the date picker, same index order. */
+export const WEEKDAY_FULL_LABELS = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+] as const;
+
 /** Days in each month for the 366-date calendar, including Feb 29. */
 export const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] as const;
 
-/** Unused (notched) cells, shown as absent wood. */
+/** Unused cells: unplayable, shown as continuous wood with recessed plaques. */
 export const UNUSED_CELLS: readonly Cell[] = [
   { r: 0, c: 6 },
   { r: 1, c: 6 },
-  { r: 6, c: 3 },
-  { r: 6, c: 4 },
-  { r: 6, c: 5 },
-  { r: 6, c: 6 },
+  { r: 7, c: 0 },
+  { r: 7, c: 1 },
+  { r: 7, c: 2 },
+  { r: 7, c: 3 },
 ];
 
 const unusedSet = new Set(UNUSED_CELLS.map(cellKey));
@@ -81,14 +97,28 @@ export function dayCell(day: number): Cell {
   return { r: 2 + Math.floor(i / COLS), c: i % COLS };
 }
 
+/**
+ * Weekday 0–6 (Sunday–Saturday, same as Date#getDay()) → board cell.
+ * Sun–Wed sit on row 6 after day 31; Thu–Sat occupy the last three cells of row 7.
+ */
+export function weekdayCell(weekday: number): Cell {
+  if (weekday < 0 || weekday > 6) {
+    throw new RangeError(`weekday must be 0–6, got ${weekday}`);
+  }
+  if (weekday <= 3) return { r: 6, c: 3 + weekday };
+  return { r: 7, c: weekday };
+}
+
 export function labelFor(r: number, c: number): string | null {
   if (!isPlayable(r, c)) return null;
   if (r === 0 && c <= 5) return MONTH_LABELS[c] ?? null;
   if (r === 1 && c <= 5) return MONTH_LABELS[6 + c] ?? null;
-  if (r >= 2) {
+  if (r >= 2 && r <= 6) {
     const day = (r - 2) * COLS + c + 1;
     if (day >= 1 && day <= 31) return String(day);
   }
+  if (r === 6 && c >= 3 && c <= 6) return WEEKDAY_LABELS[c - 3] ?? null;
+  if (r === 7 && c >= 4 && c <= 6) return WEEKDAY_LABELS[c] ?? null;
   return null;
 }
 
@@ -100,18 +130,19 @@ function maskFromCells(cells: readonly Cell[]): bigint {
 
 export const UNUSED_MASK = maskFromCells(UNUSED_CELLS);
 
-/** Bits for all 43 playable squares. */
-export const FULL_BOARD_MASK: bigint = ((1n << 49n) - 1n) ^ UNUSED_MASK;
+/** Bits for all 50 playable squares (8×7 = 56 bits, minus 6 unused). */
+export const FULL_BOARD_MASK: bigint = ((1n << BigInt(ROWS * COLS)) - 1n) ^ UNUSED_MASK;
 
-export function dateMask(month: number, day: number): bigint {
+export function dateMask(month: number, day: number, weekday: number): bigint {
   const m = monthCell(month);
   const d = dayCell(day);
-  return bitOf(m.r, m.c) | bitOf(d.r, d.c);
+  const w = weekdayCell(weekday);
+  return bitOf(m.r, m.c) | bitOf(d.r, d.c) | bitOf(w.r, w.c);
 }
 
-/** Playable cells that must be covered for a given date (41 bits). */
-export function coverMask(month: number, day: number): bigint {
-  return FULL_BOARD_MASK & ~dateMask(month, day);
+/** Playable cells that must be covered for a given date (47 bits). */
+export function coverMask(month: number, day: number, weekday: number): bigint {
+  return FULL_BOARD_MASK & ~dateMask(month, day, weekday);
 }
 
 export function cellsEqual(a: Cell, b: Cell): boolean {
@@ -126,6 +157,8 @@ export function sameCellSet(a: readonly Cell[], b: readonly Cell[]): boolean {
 
 export type CalendarDate = { month: number; day: number };
 
+export type CalendarPuzzle = { month: number; day: number; weekday: number };
+
 /** All 366 calendar dates, including Feb 29. */
 export function allCalendarDates(): CalendarDate[] {
   const dates: CalendarDate[] = [];
@@ -138,7 +171,20 @@ export function allCalendarDates(): CalendarDate[] {
   return dates;
 }
 
-export function dateLabel(month: number, day: number): string {
+/** All 366 × 7 = 2562 month/day/weekday combinations, including Feb 29. */
+export function allCalendarPuzzles(): CalendarPuzzle[] {
+  const puzzles: CalendarPuzzle[] = [];
+  for (const { month, day } of allCalendarDates()) {
+    for (let weekday = 0; weekday < 7; weekday++) {
+      puzzles.push({ month, day, weekday });
+    }
+  }
+  return puzzles;
+}
+
+/** Heading style: short weekday, short month, day — e.g. "Sun, Nov 15". */
+export function dateLabel(month: number, day: number, weekday: number): string {
+  const week = WEEKDAY_LABELS[weekday] ?? '???';
   const name = MONTH_LABELS[month - 1] ?? '???';
-  return `${name} ${day}`;
+  return `${week}, ${name} ${day}`;
 }

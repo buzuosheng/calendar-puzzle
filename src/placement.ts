@@ -6,6 +6,7 @@ import {
   isUnused,
   bitOf,
   FULL_BOARD_MASK,
+  COVER_CELLS,
 } from './board';
 import {
   type PieceId,
@@ -95,13 +96,14 @@ export function occupancyMask(
 }
 
 /**
- * The board is solved when all eight pieces are placed, they do not overlap,
- * and they cover exactly the 41 non-date playable cells.
+ * The board is solved when all ten pieces are placed, they do not overlap,
+ * and they cover exactly the 47 non-date playable cells.
  */
 export function isSolved(
   placements: readonly Placement[],
   month: number,
   day: number,
+  weekday: number,
 ): boolean {
   if (placements.length !== PIECE_IDS.length) return false;
   const seen = new Set<PieceId>();
@@ -115,11 +117,11 @@ export function isSolved(
     const pieceMask = maskOfCells(pieceCells);
     if (pieceMask & mask) return false;
     if ((pieceMask & FULL_BOARD_MASK) !== pieceMask) return false;
-    if (pieceMask & dateMask(month, day)) return false;
+    if (pieceMask & dateMask(month, day, weekday)) return false;
     mask |= pieceMask;
     cells += pieceCells.length;
   }
-  return cells === 41 && mask === coverMask(month, day) && seen.size === 8;
+  return cells === COVER_CELLS && mask === coverMask(month, day, weekday) && seen.size === PIECE_IDS.length;
 }
 
 /**

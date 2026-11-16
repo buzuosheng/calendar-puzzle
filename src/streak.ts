@@ -10,7 +10,7 @@ export type BestEntry = {
   hintsUsed: number;
 };
 
-export type BestMap = Record<string, BestEntry>; // key = MM-DD
+export type BestMap = Record<string, BestEntry>; // key = MM-DD-W (W = 0–6 weekday)
 
 /** Local calendar date as YYYY-MM-DD. */
 export function localDateKey(date: Date): string {
@@ -27,6 +27,25 @@ export function localMonthDay(date: Date): { month: number; day: number } {
 /** Puzzle / best-time key, e.g. "10-06". */
 export function monthDayKey(month: number, day: number): string {
   return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/** Puzzle / best-time key including weekday, e.g. "10-06-0" for Sunday 6 Oct. */
+export function monthDayWeekdayKey(month: number, day: number, weekday: number): string {
+  return `${monthDayKey(month, day)}-${weekday}`;
+}
+
+export function localMonthDayWeekday(date: Date): { month: number; day: number; weekday: number } {
+  return { month: date.getMonth() + 1, day: date.getDate(), weekday: date.getDay() };
+}
+
+/** True when the puzzle's month, day, and weekday all match the given local date. */
+export function matchesLocalToday(
+  month: number,
+  day: number,
+  weekday: number,
+  today: Date,
+): boolean {
+  return month === today.getMonth() + 1 && day === today.getDate() && weekday === today.getDay();
 }
 
 export function parseDateKey(key: string): { year: number; month: number; day: number } {

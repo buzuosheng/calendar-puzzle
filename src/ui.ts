@@ -1,17 +1,18 @@
-import { COLS, ROWS, MONTH_LABELS, isUnused, labelFor, dateLabel } from './board';
+import { COLS, ROWS, MONTH_LABELS, WEEKDAY_FULL_LABELS, isUnused, labelFor, dateLabel } from './board';
 import {
   type PieceId,
   ORIENTATIONS,
-  PIECE_COLORS,
   PIECE_IDS,
   boundingBox,
-  neighborFlags,
   translate,
 } from './pieces';
+import { roundedPolyominoPath } from './piecePath';
 import { isLegalPlacement } from './placement';
 import { Game, formatTime } from './game';
 
 const DRAG_THRESHOLD = 6;
+
+let pieceShapeSeq = 0;
 
 type DragState = {
   id: PieceId;
@@ -27,7 +28,7 @@ type DragState = {
 };
 
 export function mountApp(root: HTMLElement): Game {
-  const game = new Game();
+  const game = new Game({ previewYesterday: true });
   root.innerHTML = layout();
   const refs = bindRefs(root);
   let drag: DragState | null = null;
@@ -39,9 +40,6 @@ export function mountApp(root: HTMLElement): Game {
     const width = refs.board.clientWidth;
     if (width > 0) {
       cellSize = width / COLS;
-      const value = `${cellSize}px`;
-      root.style.setProperty('--cell', value);
-      document.documentElement.style.setProperty('--cell', value);
     }
     if (!drag) renderPieces();
   };
@@ -49,17 +47,19 @@ export function mountApp(root: HTMLElement): Game {
   const renderDateControls = () => {
     refs.monthSelect.value = String(game.month);
     refs.daySelect.value = String(game.day);
+    refs.weekdaySelect.value = String(game.weekday);
   };
 
   const renderStats = () => {
     const snap = game.snapshot();
-    refs.timer.textContent = formatTime(game.elapsedMs());
-    refs.hints.textContent = String(snap.hintsUsed);
+    const preview = snap.mode === 'preview';
+    refs.timer.textContent = preview ? '—' : formatTime(game.elapsedMs());
+    refs.hints.textContent = preview ? '—' : String(snap.hintsUsed);
     refs.streak.textContent = String(snap.streak);
     refs.best.textContent = snap.best
       ? `${formatTime(snap.best.timeMs)} · ${snap.best.hintsUsed} hint${snap.best.hintsUsed === 1 ? '' : 's'}`
       : '—';
-    refs.dateHeading.textContent = dateLabel(game.month, game.day);
+    refs.dateHeading.textContent = dateLabel(game.month, game.day, game.weekday);
   };
 
   const renderBoard = () => {
@@ -68,7 +68,9 @@ export function mountApp(root: HTMLElement): Game {
       const r = Number(el.dataset.r);
       const c = Number(el.dataset.c);
       const isDate =
-        (r === date.month.r && c === date.month.c) || (r === date.day.r && c === date.day.c);
+        (r === date.month.r && c === date.month.c) ||
+        (r === date.day.r && c === date.day.c) ||
+        (r === date.weekday.r && c === date.weekday.c);
       el.classList.toggle('date-cell', isDate);
       el.classList.remove('preview-valid', 'preview-invalid');
     });
@@ -89,12 +91,12 @@ export function mountApp(root: HTMLElement): Game {
       const size = piece.location === 'board' ? cellSize : traySize;
       const el = createPieceElement(id, piece.orientationIndex, size);
       el.classList.toggle('selected', game.selectedId === id);
-      el.classList.toggle('solved-lock', game.solved);
+      el.classList.toggle('solved-lock', game.locked);
       el.setAttribute(
         'aria-label',
         `${id} piece${piece.location === 'board' ? ' on the board' : ' in the tray'}`,
       );
-      el.tabIndex = game.solved ? -1 : 0;
+      el.tabIndex = game.locked ? -1 : 0;
       if (piece.location === 'board' && piece.origin) {
         el.style.left = `${piece.origin.c * cellSize}px`;
         el.style.top = `${piece.origin.r * cellSize}px`;
@@ -107,9 +109,12 @@ export function mountApp(root: HTMLElement): Game {
   };
 
   const renderSolved = () => {
+    const preview = game.mode === 'preview';
+    refs.root.classList.toggle('is-preview', preview);
     const visible = game.solved;
+    refs.root.classList.toggle('is-solved', visible);
     refs.banner.classList.toggle('visible', visible);
-    refs.banner.hidden = !visible;
+    refs.banner.setAttribute('aria-hidden', visible ? 'false' : 'true');
     if (visible) {
       const hints = game.hintsUsed;
       refs.bannerBody.textContent = `Time ${formatTime(game.elapsedMs())} · ${hints} hint${hints === 1 ? '' : 's'}`;
@@ -117,10 +122,12 @@ export function mountApp(root: HTMLElement): Game {
   };
 
   const updateButtons = () => {
-    const disabled = game.solved || !game.selectedId;
+    const disabled = game.locked || !game.selectedId;
     refs.rotateBtn.disabled = disabled;
     refs.flipBtn.disabled = disabled;
-    refs.hintBtn.disabled = game.solved;
+    refs.hintBtn.disabled = game.locked;
+    refs.undoBtn.disabled = !game.canUndo;
+    refs.resetBtn.disabled = game.mode === 'preview';
   };
 
   const startTick = () => {
@@ -268,7 +275,7 @@ export function mountApp(root: HTMLElement): Game {
 
   function attachPointer(el: HTMLElement, id: PieceId) {
     el.addEventListener('pointerdown', (event: PointerEvent) => {
-      if (game.solved) return;
+      if (game.locked) return;
       if (event.button !== 0) return;
       event.preventDefault();
       el.setPointerCapture(event.pointerId);
@@ -311,16 +318,35 @@ export function mountApp(root: HTMLElement): Game {
   }
 
   refs.monthSelect.addEventListener('change', () => {
-    game.setDate(Number(refs.monthSelect.value), Number(refs.daySelect.value));
+    game.setDate(
+      Number(refs.monthSelect.value),
+      Number(refs.daySelect.value),
+      Number(refs.weekdaySelect.value),
+    );
     afterAction();
   });
   refs.daySelect.addEventListener('change', () => {
-    game.setDate(Number(refs.monthSelect.value), Number(refs.daySelect.value));
+    game.setDate(
+      Number(refs.monthSelect.value),
+      Number(refs.daySelect.value),
+      Number(refs.weekdaySelect.value),
+    );
+    afterAction();
+  });
+  refs.weekdaySelect.addEventListener('change', () => {
+    game.setDate(
+      Number(refs.monthSelect.value),
+      Number(refs.daySelect.value),
+      Number(refs.weekdaySelect.value),
+    );
     afterAction();
   });
   refs.todayBtn.addEventListener('click', () => {
-    const now = new Date();
-    game.setDate(now.getMonth() + 1, now.getDate());
+    game.startToday();
+    afterAction();
+  });
+  refs.startTodayBtn.addEventListener('click', () => {
+    game.startToday();
     afterAction();
   });
   refs.resetBtn.addEventListener('click', () => {
@@ -339,10 +365,26 @@ export function mountApp(root: HTMLElement): Game {
     game.flip();
     afterAction();
   });
+  refs.undoBtn.addEventListener('click', () => {
+    game.undo();
+    afterAction();
+  });
 
   window.addEventListener('keydown', (event) => {
     const target = event.target as HTMLElement | null;
     if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA')) {
+      return;
+    }
+    const isUndoKey =
+      (event.ctrlKey || event.metaKey) &&
+      !event.shiftKey &&
+      !event.altKey &&
+      event.key.toLowerCase() === 'z';
+    if (isUndoKey) {
+      if (game.locked) return;
+      event.preventDefault();
+      game.undo();
+      afterAction();
       return;
     }
     const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
@@ -369,6 +411,7 @@ export function mountApp(root: HTMLElement): Game {
   ro.observe(refs.boardWrap);
 
   renderBoardSkeleton(refs.board);
+  renderBoardPlate(refs.boardWrap);
   afterAction();
   measure();
   return game;
@@ -377,46 +420,62 @@ export function mountApp(root: HTMLElement): Game {
 function layout(): string {
   const months = MONTH_LABELS.map((label, i) => `<option value="${i + 1}">${label}</option>`).join('');
   const days = Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('');
+  const weekdays = WEEKDAY_FULL_LABELS.map((label, i) => `<option value="${i}">${label}</option>`).join('');
   return `
     <div class="app">
-      <header class="header">
-        <div class="title-row">
-          <h1>Calendar Puzzle</h1>
-          <p class="tagline">A daily polyomino calendar</p>
-        </div>
-        <p class="howto">
-          Leave the month and the day uncovered, then fit all eight pieces onto the remaining squares.
-          Drag to place. Press <kbd>R</kbd> or click a selected piece to rotate, <kbd>F</kbd> to flip,
-          and <kbd>H</kbd> for a hint.
-        </p>
-      </header>
+      <div class="sidebar">
       <section class="controls" aria-label="Puzzle controls">
-        <div class="panel date-block">
+        <div class="title-block">
+          <h1>Calendar Puzzle</h1>
+          <div class="title-date-row">
+            <strong id="date-heading" class="date-heading"></strong>
+            <button type="button" class="btn secondary" id="today-btn">Today</button>
+          </div>
+        </div>
+        <div class="date-fields">
           <label class="field">Month
             <select id="month-select" aria-label="Month">${months}</select>
           </label>
           <label class="field">Day
             <select id="day-select" aria-label="Day">${days}</select>
           </label>
-          <button type="button" class="btn secondary" id="today-btn">Today</button>
-          <strong id="date-heading" class="stat-value"></strong>
+          <label class="field">Weekday
+            <select id="weekday-select" aria-label="Weekday">${weekdays}</select>
+          </label>
         </div>
-        <div class="panel stats">
+        <div class="stats">
           <div class="stat"><span class="stat-label">Time</span><span class="stat-value" id="stat-timer">0:00</span></div>
           <div class="stat"><span class="stat-label">Hints</span><span class="stat-value" id="stat-hints">0</span></div>
           <div class="stat"><span class="stat-label">Streak</span><span class="stat-value" id="stat-streak">0</span></div>
           <div class="stat"><span class="stat-label">Best</span><span class="stat-value" id="stat-best">—</span></div>
         </div>
-        <div class="panel actions">
+        <div class="actions">
+          <button type="button" class="btn" id="start-today-btn">Start today</button>
           <button type="button" class="btn secondary" id="rotate-btn">Rotate</button>
           <button type="button" class="btn secondary" id="flip-btn">Flip</button>
           <button type="button" class="btn" id="hint-btn">Hint</button>
+          <button type="button" class="btn secondary" id="undo-btn">Undo</button>
           <button type="button" class="btn secondary" id="reset-btn">Reset</button>
         </div>
       </section>
+      <div class="status-slot">
+        <p class="howto" data-howto="play">
+          Leave the month, day, and weekday uncovered. Drag to place, or use <kbd>R</kbd>, <kbd>F</kbd>, <kbd>H</kbd>, and <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd>.
+        </p>
+        <p class="howto" data-howto="preview">
+          Yesterday's solution. Start today's challenge when you're ready.
+        </p>
+        <div class="solved-banner" id="solved-banner" aria-hidden="true">
+          <strong>Solved</strong>
+          <p id="solved-body"></p>
+        </div>
+      </div>
+      </div>
       <div class="play-area">
         <div class="board-wrap" id="board-wrap">
           <div class="board" id="board" role="grid" aria-label="Calendar board"></div>
+          <p class="board-caption board-caption-tr">Date</p>
+          <p class="board-caption board-caption-bl">Leave these open</p>
           <div class="board-pieces" id="board-pieces"></div>
         </div>
         <aside class="tray-panel" id="tray-panel">
@@ -424,13 +483,6 @@ function layout(): string {
           <div class="tray" id="tray" aria-label="Piece tray"></div>
         </aside>
       </div>
-      <div class="solved-banner" id="solved-banner" hidden>
-        <strong>Solved</strong>
-        <p id="solved-body"></p>
-      </div>
-      <footer class="footer">
-        <p>Eight pieces. Forty-one squares. One date left open.</p>
-      </footer>
     </div>
   `;
 }
@@ -445,7 +497,9 @@ function bindRefs(root: HTMLElement) {
     root,
     monthSelect: byId<HTMLSelectElement>('month-select'),
     daySelect: byId<HTMLSelectElement>('day-select'),
+    weekdaySelect: byId<HTMLSelectElement>('weekday-select'),
     todayBtn: byId<HTMLButtonElement>('today-btn'),
+    startTodayBtn: byId<HTMLButtonElement>('start-today-btn'),
     dateHeading: byId<HTMLElement>('date-heading'),
     timer: byId<HTMLElement>('stat-timer'),
     hints: byId<HTMLElement>('stat-hints'),
@@ -454,6 +508,7 @@ function bindRefs(root: HTMLElement) {
     rotateBtn: byId<HTMLButtonElement>('rotate-btn'),
     flipBtn: byId<HTMLButtonElement>('flip-btn'),
     hintBtn: byId<HTMLButtonElement>('hint-btn'),
+    undoBtn: byId<HTMLButtonElement>('undo-btn'),
     resetBtn: byId<HTMLButtonElement>('reset-btn'),
     boardWrap: byId<HTMLElement>('board-wrap'),
     board: byId<HTMLElement>('board'),
@@ -485,33 +540,121 @@ function renderBoardSkeleton(board: HTMLElement) {
   }
 }
 
+function renderBoardPlate(wrap: HTMLElement) {
+  wrap.querySelector('.board-plate')?.remove();
+  const svg = svgEl('svg', {
+    class: 'board-plate',
+    viewBox: `0 0 ${COLS} ${ROWS}`,
+    'aria-hidden': 'true',
+  });
+  const rectAttrs = {
+    x: '0',
+    y: '0',
+    width: String(COLS),
+    height: String(ROWS),
+    rx: '0.14',
+    ry: '0.14',
+  };
+  svg.append(
+    svgEl('rect', { class: 'board-frame-edge', ...rectAttrs }),
+    svgEl('rect', { class: 'board-frame-stroke', ...rectAttrs }),
+    svgEl('rect', { class: 'board-well', ...rectAttrs }),
+  );
+  wrap.insertBefore(svg, wrap.firstChild);
+}
+
+
+function svgEl(name: string, attrs: Record<string, string> = {}): SVGElement {
+  const node = document.createElementNS('http://www.w3.org/2000/svg', name);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+  return node;
+}
+
+
+function pieceGridLines(
+  cells: readonly { r: number; c: number }[],
+  size: number,
+  box: { minR: number; minC: number },
+): SVGElement {
+  const filled = new Set(cells.map((cell) => `${cell.r - box.minR},${cell.c - box.minC}`));
+  const has = (r: number, c: number) => filled.has(`${r},${c}`);
+  const group = svgEl('g', { class: 'piece-grid' });
+  for (const key of filled) {
+    const [r, c] = key.split(',').map(Number) as [number, number];
+    if (has(r, c + 1)) {
+      const x = (c + 1) * size;
+      group.append(
+        svgEl('line', {
+          class: 'piece-grid-line',
+          x1: String(x),
+          y1: String(r * size),
+          x2: String(x),
+          y2: String((r + 1) * size),
+        }),
+      );
+    }
+    if (has(r + 1, c)) {
+      const y = (r + 1) * size;
+      group.append(
+        svgEl('line', {
+          class: 'piece-grid-line',
+          x1: String(c * size),
+          y1: String(y),
+          x2: String((c + 1) * size),
+          y2: String(y),
+        }),
+      );
+    }
+  }
+  return group;
+}
+
 function createPieceElement(id: PieceId, orientationIndex: number, size: number): HTMLElement {
   const ori = ORIENTATIONS[id][orientationIndex]!;
   const box = boundingBox(ori);
   const el = document.createElement('div');
   el.className = 'piece';
   el.dataset.piece = id;
-  el.style.width = `${box.width * size}px`;
-  el.style.height = `${box.height * size}px`;
-  const color = PIECE_COLORS[id];
-  el.style.setProperty('--piece-fill', color.fill);
-  el.style.setProperty('--piece-stroke', color.stroke);
-  el.style.setProperty('--piece-highlight', color.highlight);
-  const flags = neighborFlags(ori);
-  for (const cell of ori) {
-    const node = document.createElement('div');
-    node.className = 'piece-cell';
-    node.style.left = `${cell.c * size}px`;
-    node.style.top = `${cell.r * size}px`;
-    node.style.width = `${size}px`;
-    node.style.height = `${size}px`;
-    const n = flags.get(`${cell.r},${cell.c}`);
-    if (n?.n) node.classList.add('n');
-    if (n?.e) node.classList.add('e');
-    if (n?.s) node.classList.add('s');
-    if (n?.w) node.classList.add('w');
-    el.appendChild(node);
-  }
+  const width = box.width * size;
+  const height = box.height * size;
+  el.style.width = `${width}px`;
+  el.style.height = `${height}px`;
+  const d = roundedPolyominoPath(ori, size);
+  const uid = `ps${pieceShapeSeq++}`;
+  const svg = svgEl('svg', {
+    class: 'piece-svg',
+    viewBox: `0 0 ${width} ${height}`,
+    width: String(width),
+    height: String(height),
+    'aria-hidden': 'true',
+  });
+  const defs = svgEl('defs');
+  const wood = svgEl('linearGradient', {
+    id: `${uid}-wood`,
+    x1: '0',
+    y1: '0',
+    x2: '0',
+    y2: '1',
+  });
+  wood.append(
+    svgEl('stop', { offset: '0%', 'stop-color': 'var(--piece-highlight)' }),
+    svgEl('stop', { offset: '50%', 'stop-color': 'var(--piece-fill)' }),
+    svgEl('stop', { offset: '100%', 'stop-color': 'var(--piece-deep)' }),
+  );
+  defs.append(wood);
+  svg.append(
+    defs,
+    svgEl('path', {
+      class: 'piece-shape',
+      d,
+      fill: `url(#${uid}-wood)`,
+      stroke: 'var(--piece-stroke)',
+      'stroke-width': '1',
+      'stroke-linejoin': 'round',
+    }),
+    pieceGridLines(ori, size, box),
+  );
+  el.appendChild(svg);
   return el;
 }
 

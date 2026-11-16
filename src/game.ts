@@ -1,4 +1,4 @@
-import { type Cell, dateMask, monthCell, dayCell, sameCellSet } from './board';
+import { type Cell, COLS, dateMask, monthCell, dayCell, weekdayCell, sameCellSet } from './board';
 import {
   type PieceId,
   ORIENTATIONS,
@@ -29,9 +29,13 @@ export type PieceState = {
   origin: Cell | null;
 };
 
+export type GameMode = 'preview' | 'play';
+
 export type GameSnapshot = {
   month: number;
   day: number;
+  weekday: number;
+  mode: GameMode;
   pieces: PieceState[];
   selectedId: PieceId | null;
   timerRunning: boolean;
@@ -48,17 +52,32 @@ export type HintResult =
   | { action: 'placed'; pieceId: PieceId }
   | { action: 'returned'; pieceId: PieceId };
 
+type UndoEntry = {
+  pieces: PieceState[];
+  selectedId: PieceId | null;
+  hintsUsed: number;
+};
+
 export type GameOptions = {
   month?: number;
   day?: number;
+  weekday?: number;
   now?: () => number;
   today?: () => Date;
   persist?: boolean;
+  previewYesterday?: boolean;
 };
 
-function defaultTodayDate(): { month: number; day: number } {
-  const now = new Date();
-  return { month: now.getMonth() + 1, day: now.getDate() };
+export function calendarParts(date: Date): { month: number; day: number; weekday: number } {
+  return { month: date.getMonth() + 1, day: date.getDate(), weekday: date.getDay() };
+}
+
+export function previousDate(from: Date): Date {
+  return new Date(from.getFullYear(), from.getMonth(), from.getDate() - 1);
+}
+
+function defaultTodayDate(): { month: number; day: number; weekday: number } {
+  return calendarParts(new Date());
 }
 
 function initialPieces(): PieceState[] {
@@ -73,6 +92,7 @@ function initialPieces(): PieceState[] {
 export class Game {
   month: number;
   day: number;
+  weekday: number;
   pieces: PieceState[];
   selectedId: PieceId | null = null;
   timerRunning = false;
@@ -81,6 +101,7 @@ export class Game {
   streak = 0;
   lastSolved: string | null = null;
   bests: BestMap = {};
+  mode: GameMode = 'play';
 
   private startedAt: number | null = null;
   private stoppedMs = 0;
@@ -88,24 +109,41 @@ export class Game {
   private readonly today: () => Date;
   private readonly persist: boolean;
   private savedThisAttempt = false;
+  private history: UndoEntry[] = [];
 
   constructor(options: GameOptions = {}) {
-    const todayDate = options.month && options.day ? { month: options.month, day: options.day } : defaultTodayDate();
+    const todayDate = defaultTodayDate();
     this.month = options.month ?? todayDate.month;
     this.day = options.day ?? todayDate.day;
+    this.weekday = options.weekday ?? todayDate.weekday;
     this.pieces = initialPieces();
     this.now = options.now ?? (() => Date.now());
     this.today = options.today ?? (() => new Date());
     this.persist = options.persist !== false;
     this.reloadProgress();
+    if (options.previewYesterday) {
+      this.showYesterdaySolution();
+    }
+  }
+
+  get locked(): boolean {
+    return this.solved || this.mode === 'preview';
+  }
+
+  get canUndo(): boolean {
+    return !this.locked && this.history.length > 0;
   }
 
   get blocked(): bigint {
-    return dateMask(this.month, this.day);
+    return dateMask(this.month, this.day, this.weekday);
   }
 
-  get dateCells(): { month: Cell; day: Cell } {
-    return { month: monthCell(this.month), day: dayCell(this.day) };
+  get dateCells(): { month: Cell; day: Cell; weekday: Cell } {
+    return {
+      month: monthCell(this.month),
+      day: dayCell(this.day),
+      weekday: weekdayCell(this.weekday),
+    };
   }
 
   reloadProgress(): void {
@@ -160,7 +198,7 @@ export class Game {
   }
 
   private startTimerIfNeeded(): void {
-    if (this.solved || this.timerRunning) return;
+    if (this.locked || this.timerRunning) return;
     this.timerRunning = true;
     this.startedAt = this.now() - this.stoppedMs;
   }
@@ -181,6 +219,8 @@ export class Game {
     return {
       month: this.month,
       day: this.day,
+      weekday: this.weekday,
+      mode: this.mode,
       pieces: this.pieces.map((piece) => ({ ...piece })),
       selectedId: this.selectedId,
       timerRunning: this.timerRunning,
@@ -189,13 +229,14 @@ export class Game {
       elapsedMs: this.elapsedMs(),
       streak: this.streak,
       lastSolved: this.lastSolved,
-      best: bestFor(this.bests, this.month, this.day),
+      best: bestFor(this.bests, this.month, this.day, this.weekday),
     };
   }
 
-  setDate(month: number, day: number): void {
+  setDate(month: number, day: number, weekday: number): void {
     this.month = month;
     this.day = day;
+    this.weekday = weekday;
     this.resetBoard();
   }
 
@@ -203,14 +244,71 @@ export class Game {
     this.resetBoard();
   }
 
+  showYesterdaySolution(): void {
+    const parts = calendarParts(previousDate(this.today()));
+    this.applyPreview(parts.month, parts.day, parts.weekday);
+  }
+
+  startToday(): void {
+    const parts = calendarParts(this.today());
+    this.setDate(parts.month, parts.day, parts.weekday);
+  }
+
+  applyPreview(month: number, day: number, weekday: number): void {
+    this.month = month;
+    this.day = day;
+    this.weekday = weekday;
+    this.resetBoard();
+    this.mode = 'preview';
+    const solution = canonicalSolution(month, day, weekday);
+    if (!solution) return;
+    for (const placed of solution) {
+      const piece = this.piece(placed.pieceId);
+      piece.orientationIndex = placed.orientationIndex;
+      piece.location = 'board';
+      piece.origin = { ...placed.origin };
+    }
+    this.selectedId = null;
+  }
+
   private resetBoard(): void {
+    this.mode = 'play';
     this.pieces = initialPieces();
     this.selectedId = null;
     this.hintsUsed = 0;
     this.solved = false;
     this.savedThisAttempt = false;
     this.resetTimer();
+    this.clearHistory();
     this.reloadProgress();
+  }
+
+  private clonePieces(pieces: PieceState[]): PieceState[] {
+    return pieces.map((piece) => ({
+      ...piece,
+      origin: piece.origin ? { ...piece.origin } : null,
+    }));
+  }
+
+  private pushHistory(): void {
+    this.history.push({
+      pieces: this.clonePieces(this.pieces),
+      selectedId: this.selectedId,
+      hintsUsed: this.hintsUsed,
+    });
+  }
+
+  private clearHistory(): void {
+    this.history = [];
+  }
+
+  undo(): void {
+    if (this.locked) return;
+    const entry = this.history.pop();
+    if (!entry) return;
+    this.pieces = this.clonePieces(entry.pieces);
+    this.selectedId = entry.selectedId;
+    this.hintsUsed = entry.hintsUsed;
   }
 
   select(id: PieceId | null): void {
@@ -219,15 +317,22 @@ export class Game {
 
   /** Successful placement. Invalid moves are rejected and not committed. */
   tryPlace(id: PieceId, origin: Cell, orientationIndex?: number): boolean {
-    if (this.solved) return false;
+    if (this.locked) return false;
     const piece = this.piece(id);
     const oriIndex = orientationIndex ?? piece.orientationIndex;
     if (!ORIENTATIONS[id][oriIndex]) return false;
     const cells = translate(ORIENTATIONS[id][oriIndex]!, origin);
     if (!isLegalPlacement(cells, this.occupied(id), this.blocked)) return false;
+    const samePlace =
+      piece.location === 'board' &&
+      piece.orientationIndex === oriIndex &&
+      piece.origin != null &&
+      piece.origin.r === origin.r &&
+      piece.origin.c === origin.c;
+    if (!samePlace) this.pushHistory();
     piece.orientationIndex = oriIndex;
     piece.location = 'board';
-    piece.origin = origin;
+    piece.origin = { ...origin };
     this.selectedId = id;
     this.startTimerIfNeeded();
     this.checkWin();
@@ -235,7 +340,17 @@ export class Game {
   }
 
   returnToTray(id: PieceId): void {
-    if (this.solved) return;
+    if (this.locked) return;
+    const piece = this.piece(id);
+    if (piece.location === 'tray' && piece.origin == null) {
+      this.selectedId = id;
+      return;
+    }
+    this.pushHistory();
+    this.moveToTray(id);
+  }
+
+  private moveToTray(id: PieceId): void {
     const piece = this.piece(id);
     piece.location = 'tray';
     piece.origin = null;
@@ -248,12 +363,13 @@ export class Game {
    */
   rotate(id?: PieceId): void {
     const target = id ?? this.selectedId;
-    if (!target || this.solved) return;
+    if (!target || this.locked) return;
     const piece = this.piece(target);
     const current = this.cellsFor(target);
     const rotated = rotateCells90CW(current);
     const found = placementFromCells(target, rotated);
     if (!found) return;
+    this.pushHistory();
     this.startTimerIfNeeded();
     if (piece.location === 'tray') {
       piece.orientationIndex = found.orientationIndex;
@@ -265,12 +381,13 @@ export class Game {
   /** Horizontally mirror the selected piece. */
   flip(id?: PieceId): void {
     const target = id ?? this.selectedId;
-    if (!target || this.solved) return;
+    if (!target || this.locked) return;
     const piece = this.piece(target);
     const current = this.cellsFor(target);
     const flipped = flipCellsHorizontal(current);
     const found = placementFromCells(target, flipped);
     if (!found) return;
+    this.pushHistory();
     this.startTimerIfNeeded();
     if (piece.location === 'tray') {
       piece.orientationIndex = found.orientationIndex;
@@ -299,7 +416,7 @@ export class Game {
   }
 
   isComplete(): boolean {
-    return isSolved(this.boardPlacements(), this.month, this.day);
+    return isSolved(this.boardPlacements(), this.month, this.day, this.weekday);
   }
 
   private checkWin(): void {
@@ -311,6 +428,7 @@ export class Game {
       const progress = saveSolve({
         month: this.month,
         day: this.day,
+        weekday: this.weekday,
         timeMs: this.elapsedMs(),
         hintsUsed: this.hintsUsed,
         today: this.today(),
@@ -327,20 +445,20 @@ export class Game {
    * or return a blocking piece if the target cells are occupied.
    */
   hint(): HintResult {
-    if (this.solved) return { action: 'none' };
-    const solution = canonicalSolution(this.month, this.day);
+    if (this.locked) return { action: 'none' };
+    const solution = canonicalSolution(this.month, this.day, this.weekday);
     if (!solution) return { action: 'none' };
-
-    this.startTimerIfNeeded();
-    this.hintsUsed += 1;
 
     for (const target of solution) {
       const piece = this.piece(target.pieceId);
       if (isCorrectlyPlaced(piece, target)) continue;
 
       const blocker = this.firstBlocker(target, piece.pieceId);
+      this.pushHistory();
+      this.startTimerIfNeeded();
+      this.hintsUsed += 1;
       if (blocker) {
-        this.returnToTray(blocker);
+        this.moveToTray(blocker);
         return { action: 'returned', pieceId: blocker };
       }
 
@@ -352,7 +470,6 @@ export class Game {
       return { action: 'placed', pieceId: piece.pieceId };
     }
 
-    this.hintsUsed -= 1;
     this.checkWin();
     return { action: 'none' };
   }
@@ -370,7 +487,7 @@ export class Game {
       });
       const hits = cells.filter((cell) => wanted.has(`${cell.r},${cell.c}`));
       if (hits.length === 0) continue;
-      const minIndex = Math.min(...hits.map((cell) => cell.r * 7 + cell.c));
+      const minIndex = Math.min(...hits.map((cell) => cell.r * COLS + cell.c));
       occupied.push({ id: piece.pieceId, minIndex });
     }
     occupied.sort((a, b) => a.minIndex - b.minIndex);

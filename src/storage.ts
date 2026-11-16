@@ -2,7 +2,8 @@ import {
   type BestMap,
   type StreakState,
   localDateKey,
-  monthDayKey,
+  matchesLocalToday,
+  monthDayWeekdayKey,
   recordBest,
   recordSolve,
 } from './streak';
@@ -83,19 +84,31 @@ export function loadProgress(): Progress {
 export function saveSolve(options: {
   month: number;
   day: number;
+  weekday: number;
   timeMs: number;
   hintsUsed: number;
   today?: Date;
 }): Progress {
-  const todayKey = localDateKey(options.today ?? new Date());
-  const streak = recordSolve(loadStreak(), todayKey);
-  const { best } = recordBest(loadBest(), monthDayKey(options.month, options.day), options.timeMs, options.hintsUsed);
-  write(KEYS.streak, String(streak.streak));
-  write(KEYS.lastSolved, streak.lastSolved ?? todayKey);
+  const today = options.today ?? new Date();
+  // A solve only counts toward the daily streak when the puzzle is today's
+  // real local month, day, and weekday. Best times are always recorded.
+  // Old MM-DD best-time keys are left in the map and ignored.
+  const countsForStreak = matchesLocalToday(options.month, options.day, options.weekday, today);
+  const streak = countsForStreak ? recordSolve(loadStreak(), localDateKey(today)) : loadStreak();
+  const { best } = recordBest(
+    loadBest(),
+    monthDayWeekdayKey(options.month, options.day, options.weekday),
+    options.timeMs,
+    options.hintsUsed,
+  );
+  if (countsForStreak) {
+    write(KEYS.streak, String(streak.streak));
+    if (streak.lastSolved) write(KEYS.lastSolved, streak.lastSolved);
+  }
   write(KEYS.best, JSON.stringify(best));
   return { streak, best };
 }
 
-export function bestFor(best: BestMap, month: number, day: number) {
-  return best[monthDayKey(month, day)] ?? null;
+export function bestFor(best: BestMap, month: number, day: number, weekday: number) {
+  return best[monthDayWeekdayKey(month, day, weekday)] ?? null;
 }

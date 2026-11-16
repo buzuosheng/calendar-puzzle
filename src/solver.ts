@@ -14,12 +14,14 @@ import {
 } from './pieces';
 import type { Placement } from './placement';
 
+const PIECE_COUNT = PIECE_IDS.length;
+
 /**
  * Search order (deterministic; the first solution is the hint target):
  *
  * 1. Always cover the lowest-index remaining cell (index = row * 7 + col,
  *    row-major, top-left to bottom-right).
- * 2. Try pieces in fixed order: O, L, N, P, U, V, Y, Z.
+ * 2. Try pieces in fixed order: V, T, Z, L, N, P, U, J, S, I.
  * 3. For each piece, try precomputed placements that cover that cell, in
  *    generation order: unique orientations (unflipped then flipped; for each,
  *    rotations 0°, 90°, 180°, 270° CW, first-seen only), and for each
@@ -78,8 +80,12 @@ function tables(): PieceTables[] {
   return TABLES;
 }
 
+/** Index of the least-significant set bit in a 56-bit board mask. */
 function lowestBitIndex(mask: bigint): number {
-  return mask.toString(2).length - 1;
+  const low = Number(mask & 0xffffffffn);
+  if (low !== 0) return 31 - Math.clz32(low & -low);
+  const high = Number((mask >> 32n) & 0xffffffffn);
+  return 32 + (31 - Math.clz32(high & -high));
 }
 
 function reconstruct(pieceIndex: number, item: IndexedPlacement): SolvedPiece {
@@ -94,20 +100,15 @@ function reconstruct(pieceIndex: number, item: IndexedPlacement): SolvedPiece {
   };
 }
 
-/**
- * First solution for a date, or null if none (should never happen for a
- * real calendar date on this piece set, including Feb 29).
- */
-export function findFirstSolution(month: number, day: number): SolvedPiece[] | null {
-  const board = coverMask(month, day);
+function searchFirst(board: bigint): SolvedPiece[] | null {
   const tabs = tables();
-  const chosen: (IndexedPlacement | null)[] = Array(8).fill(null);
+  const chosen: (IndexedPlacement | null)[] = Array(PIECE_COUNT).fill(null);
   let used = 0;
 
   const rec = (remaining: bigint): boolean => {
     if (remaining === 0n) return true;
     const cell = lowestBitIndex(remaining);
-    for (let p = 0; p < 8; p++) {
+    for (let p = 0; p < PIECE_COUNT; p++) {
       if ((used >> p) & 1) continue;
       const options = tabs[p]!.byCell[cell]!;
       for (let i = 0; i < options.length; i++) {
@@ -127,9 +128,21 @@ export function findFirstSolution(month: number, day: number): SolvedPiece[] | n
   return chosen.map((item, p) => reconstruct(p, item!));
 }
 
-/** Count every exact covering for a date. */
-export function countSolutions(month: number, day: number): number {
-  const board = coverMask(month, day);
+/**
+ * First solution for a month/day/weekday, or null if none (should never
+ * happen for a real calendar combination on this piece set, including Feb 29).
+ */
+export function findFirstSolution(
+  month: number,
+  day: number,
+  weekday: number,
+): SolvedPiece[] | null {
+  return searchFirst(coverMask(month, day, weekday));
+}
+
+/** Count every exact covering for a month/day/weekday. */
+export function countSolutions(month: number, day: number, weekday: number): number {
+  const board = coverMask(month, day, weekday);
   const tabs = tables();
   let used = 0;
   let count = 0;
@@ -140,7 +153,7 @@ export function countSolutions(month: number, day: number): number {
       return;
     }
     const cell = lowestBitIndex(remaining);
-    for (let p = 0; p < 8; p++) {
+    for (let p = 0; p < PIECE_COUNT; p++) {
       if ((used >> p) & 1) continue;
       const options = tabs[p]!.byCell[cell]!;
       for (let i = 0; i < options.length; i++) {
@@ -159,15 +172,19 @@ export function countSolutions(month: number, day: number): number {
 
 const firstCache = new Map<string, SolvedPiece[] | null>();
 
-export function dateKey(month: number, day: number): string {
-  return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+export function dateKey(month: number, day: number, weekday: number): string {
+  return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}-${weekday}`;
 }
 
 /** Cached canonical (first) solution used by hints. */
-export function canonicalSolution(month: number, day: number): SolvedPiece[] | null {
-  const key = dateKey(month, day);
+export function canonicalSolution(
+  month: number,
+  day: number,
+  weekday: number,
+): SolvedPiece[] | null {
+  const key = dateKey(month, day, weekday);
   if (firstCache.has(key)) return firstCache.get(key)!;
-  const solution = findFirstSolution(month, day);
+  const solution = findFirstSolution(month, day, weekday);
   firstCache.set(key, solution);
   return solution;
 }

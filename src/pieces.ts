@@ -1,45 +1,56 @@
 import type { Cell } from './board';
 
 /**
- * Official DragonFjord “A Puzzle A Day” set:
- * one hexomino (O) + seven pentominoes (L, N, P, U, V, Y, Z) = 41 cells.
+ * Standard weekday (DOTY-style) calendar set:
+ * seven pentominoes (V, T, Z, L, N, P, U) + three tetrominoes (J, S, I) = 47 cells.
  *
- * The original brief named a few shapes incorrectly (Y and N were both drawn
- * as L, and an F appeared instead of Y). This is the standard set that yields
- * 24,405 solutions year-round, min 7 (Oct 6), max 216 (Jan 25).
+ * Pieces may be rotated in 90° steps and flipped. Only unique orientations
+ * are kept.
  */
-export type PieceId = 'O' | 'L' | 'N' | 'P' | 'U' | 'V' | 'Y' | 'Z';
+export type PieceId = 'V' | 'T' | 'Z' | 'L' | 'N' | 'P' | 'U' | 'J' | 'S' | 'I';
 
-export const PIECE_IDS: readonly PieceId[] = ['O', 'L', 'N', 'P', 'U', 'V', 'Y', 'Z'];
+export const PIECE_IDS: readonly PieceId[] = ['V', 'T', 'Z', 'L', 'N', 'P', 'U', 'J', 'S', 'I'];
 
-/** ASCII rows; `#` is a filled cell. */
+export const PENTOMINO_IDS: readonly PieceId[] = ['V', 'T', 'Z', 'L', 'N', 'P', 'U'];
+export const TETROMINO_IDS: readonly PieceId[] = ['J', 'S', 'I'];
+
+/** ASCII rows; `#` is a filled cell, `.` is empty. Canonical orientation. */
 export const PIECE_SHAPES: Record<PieceId, readonly string[]> = {
-  O: ['###', '###'],
-  L: ['#', '#', '#', '##'],
-  N: ['  ##', '###'],
-  P: ['##', '###'],
-  U: ['# #', '###'],
-  V: ['#', '#', '###'],
-  Y: [' #', '####'],
-  Z: ['##', ' #', ' ##'],
+  V: ['#..', '#..', '###'],
+  T: ['###', '.#.', '.#.'],
+  Z: ['##.', '.#.', '.##'],
+  L: ['##', '#.', '#.', '#.'],
+  N: ['#.', '##', '.#', '.#'],
+  P: ['##', '##', '#.'],
+  U: ['##', '#.', '##'],
+  J: ['##', '#.', '#.'],
+  S: ['#.', '##', '.#'],
+  I: ['#', '#', '#', '#'],
 };
 
 export type PieceColor = {
   fill: string;
   stroke: string;
-  highlight: string;
 };
 
-/** Distinct, high-contrast painted-wood colors. */
+/** Same flat light maple as the board; pieces are distinguished by shape. */
+export const PIECE_COLOR: PieceColor = {
+  fill: '#F3E2B8',
+  stroke: '#C49A62',
+};
+
+/** Kept so existing imports can stay; every piece uses the board maple. */
 export const PIECE_COLORS: Record<PieceId, PieceColor> = {
-  O: { fill: '#C9A15A', stroke: '#5C3E16', highlight: '#E8D09A' },
-  L: { fill: '#C24B3C', stroke: '#5A1C16', highlight: '#E28A7A' },
-  N: { fill: '#5E8A46', stroke: '#243C18', highlight: '#9BC47A' },
-  P: { fill: '#E0A03C', stroke: '#6A4A10', highlight: '#F3D07A' },
-  U: { fill: '#2F8F7B', stroke: '#143F36', highlight: '#7FCFBB' },
-  V: { fill: '#3D6FB0', stroke: '#1A3358', highlight: '#89B0E0' },
-  Y: { fill: '#8A4EA0', stroke: '#3A1C48', highlight: '#C898D8' },
-  Z: { fill: '#D25C1E', stroke: '#6A2A0C', highlight: '#F0A06A' },
+  V: PIECE_COLOR,
+  T: PIECE_COLOR,
+  Z: PIECE_COLOR,
+  L: PIECE_COLOR,
+  N: PIECE_COLOR,
+  P: PIECE_COLOR,
+  U: PIECE_COLOR,
+  J: PIECE_COLOR,
+  S: PIECE_COLOR,
+  I: PIECE_COLOR,
 };
 
 export type Orientation = readonly Cell[];
@@ -103,18 +114,20 @@ export function uniqueOrientations(shape: readonly string[]): Orientation[] {
 }
 
 export const ORIENTATIONS: Record<PieceId, Orientation[]> = {
-  O: uniqueOrientations(PIECE_SHAPES.O),
+  V: uniqueOrientations(PIECE_SHAPES.V),
+  T: uniqueOrientations(PIECE_SHAPES.T),
+  Z: uniqueOrientations(PIECE_SHAPES.Z),
   L: uniqueOrientations(PIECE_SHAPES.L),
   N: uniqueOrientations(PIECE_SHAPES.N),
   P: uniqueOrientations(PIECE_SHAPES.P),
   U: uniqueOrientations(PIECE_SHAPES.U),
-  V: uniqueOrientations(PIECE_SHAPES.V),
-  Y: uniqueOrientations(PIECE_SHAPES.Y),
-  Z: uniqueOrientations(PIECE_SHAPES.Z),
+  J: uniqueOrientations(PIECE_SHAPES.J),
+  S: uniqueOrientations(PIECE_SHAPES.S),
+  I: uniqueOrientations(PIECE_SHAPES.I),
 };
 
 export function pieceSize(pieceId: PieceId): number {
-  return pieceId === 'O' ? 6 : 5;
+  return pieceId === 'J' || pieceId === 'S' || pieceId === 'I' ? 4 : 5;
 }
 
 export function boundingBox(cells: readonly Cell[]): {
