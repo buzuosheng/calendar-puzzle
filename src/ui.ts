@@ -9,6 +9,9 @@ import {
 import { roundedPolyominoPath } from './piecePath';
 import { isLegalPlacement } from './placement';
 import { Game, formatTime } from './game';
+import { loadSession } from './storage';
+import { resolveStart } from './start';
+import { replacePuzzleUrl } from './url';
 
 const DRAG_THRESHOLD = 6;
 
@@ -28,7 +31,12 @@ type DragState = {
 };
 
 export function mountApp(root: HTMLElement): Game {
-  const game = new Game({ previewYesterday: true });
+  const start = resolveStart({
+    search: window.location.search,
+    session: loadSession(),
+    previewYesterday: true,
+  });
+  const game = new Game({ ...start, persist: true });
   root.innerHTML = layout();
   const refs = bindRefs(root);
   let drag: DragState | null = null;
@@ -151,6 +159,10 @@ export function mountApp(root: HTMLElement): Game {
     renderPieces();
     renderSolved();
     updateButtons();
+    replacePuzzleUrl(
+      { month: game.month, day: game.day, weekday: game.weekday },
+      game.mode,
+    );
     if (game.timerRunning) startTick();
   };
 

@@ -56,6 +56,10 @@ This set has at least one solution for every one of the 366 × 7 = **2,562** val
 
 On load, the board shows yesterday's complete canonical solution in a locked preview, using the player's local timezone (1 January wraps to 31 December). Start today, or changing the date picker, begins a fresh play for today or that date and resets the board and timer. The Today control is hidden during the preview; in play mode it sits beside the date heading so the player can jump back to today. A date picker lets them play any month/day/weekday (including Feb 29).
 
+If a play session is stored (Start today, a mid-play board, or a solved board), a refresh restores that session instead of the preview. The session stores the date, piece placements, hint count, timer, and whether this attempt was already saved. The undo stack is not persisted and is cleared on refresh. Preview mode does not write a session.
+
+Playable dates are shown in the URL as `?m=&d=&w=`. `?date=YYYY-MM-DD` is also accepted and uses that date’s local weekday. Preview uses a clean path with no query string. Date changes use `replaceState`.
+
 ## Features (v1, must have)
 
 1. Drag pieces from a tray onto the board; snap to grid. Invalid placements (overlap, off-board, covering a blocked or date cell) are rejected, not committed.
@@ -66,16 +70,18 @@ On load, the board shows yesterday's complete canonical solution in a locked pre
    - current daily streak (consecutive local days solved; timezone = local). A solve counts for the streak only when month, day, and weekday all match the real local today.
    - best time per month/day/weekday (only update when faster; store hint count with it). Older 7×7 month/day-only keys are left or ignored and must not crash load.
    - last solved local date (for streak)
+   - the current play session (date, placements, hints, timer, solved flag) so a refresh restores mid-play or a finished solve instead of yesterday’s preview. An already-saved solve must not be recorded twice. Invalid session data is ignored.
 6. Reset button returns all pieces to the tray and restarts the timer for the same date.
 7. Keyboard: `R` rotate, `F` flip, `H` hint, `Ctrl+Z` / `Cmd+Z` undo, `Esc` deselect. The undo shortcut is ignored when the focus is in a select, when only `Z` is pressed, or when the board is locked. Pointer/touch must work on phone and desktop.
 8. Undo reverts the last committed change (successful place, return to tray, rotate, flip, or hint, including a hint that returns a blocker). It restores piece positions, selection, and `hintsUsed`, but not the timer, date, mode, streak, or best times. The stack is not persisted and is cleared on reset, Start today, and date changes. After a solve, Undo is disabled so a persisted win is never un-saved.
 9. Responsive layout: desktop (900px and up) uses a left control sidebar and a right play area (large board, narrower tray), targeted to fit one screen, including a typical 16-inch laptop viewport. Narrower screens compact the top chrome (Today beside the date heading; month and day on one row, weekday full width). The play area becomes board | tray as soon as width allows (from about 600px, and in landscape when height is limited). No horizontal page scroll at 375×667 and 1280×800. Portrait phones may still need a little vertical scrolling if a readable board cannot share one screen with the chrome; landscape and desktop should not need a vertical scroll for the full UI. Do not drop features on mobile.
 10. Visual: cool plaster desk page (`#E2E5DF`), stamp-red primary (`#8A2E2A`), IBM Plex Sans for chrome, and a serif board font on the board and title. Only the board and pieces are light maple, with no wood grain. The board is a full 8×7 rounded rectangle; unused cells stay unplayable under the recessed plaques. Pieces are one solid maple silhouette with a faint dashed internal grid, the same on the board and in the tray. High contrast labels. Not a clone of another site’s exact art. English labels: months `Jan`–`Dec`, days `1`–`31`, weekdays `Sun`–`Sat`. Title: “Calendar Puzzle”. Short how-to on the page.
 11. Solver runs entirely in the browser (bitboard backtracking with precomputed placements). Fast enough that a first solution for any combination returns in well under 1 second on a typical laptop. Hints use a deterministic first solution so the same month/day/weekday always hints toward the same arrangement (search order is documented in the README and in `src/solver.ts`).
+12. The playable date is reflected in the URL (`?m=&d=&w=`, or `?date=YYYY-MM-DD`). Opening such a link starts or restores that date in play mode, not the yesterday preview. The live site is https://puzzle.buzuosheng.tech. The document has Open Graph / Twitter tags and a share image at `/og.png`.
 
 ## Out of scope
 
-Accounts, backend, campaign/tutorial level packs, i18n, native apps, social share images, online leaderboards, analytics.
+Accounts, backend, campaign/tutorial level packs, i18n, native apps, generated per-solve share images, online leaderboards, analytics.
 
 ## Engineering
 
@@ -88,6 +94,8 @@ Accounts, backend, campaign/tutorial level packs, i18n, native apps, social shar
   - Game applies a canonical solution and marks solved; hint still works
   - Undo restores a successful place or hint (including `hintsUsed`); reset and date changes clear the stack; undo is a no-op when locked or empty; illegal places do not push history
   - streak logic around midnight / consecutive days (pure functions, injectable clock); a solve counts for “today” only when month+day+weekday match
+  - a mid-play session is saved and restored with the timer still running; a solved session is restored without recording the streak again; preview does not write a session; Start today writes an empty play session; illegal sessions are ignored
+  - URL parsing for `m`/`d`/`w` and `date=YYYY-MM-DD`; resolveStart prefers a matching session, otherwise a URL date, otherwise preview
 - README: how to run, rules, piece set, deploy notes (static, Vercel root = repo root, build command `npm run build`, output `dist`).
 - MIT license.
 - `vercel.json` records the static build output. No history-router; the app is served at `/`.

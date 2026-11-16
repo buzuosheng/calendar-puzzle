@@ -2,6 +2,10 @@
 
 A pure-frontend, English-only daily calendar polyomino puzzle. Leave the month, the day, and the weekday uncovered, then fit all ten pieces on the remaining 47 squares. Pieces may be rotated and flipped.
 
+Play it online at [puzzle.buzuosheng.tech](https://puzzle.buzuosheng.tech).
+
+![Calendar Puzzle](public/og.png)
+
 This is an original web implementation of the well-known weekday (DOTY-style) calendar puzzle: an 8×7 board with 50 playable cells. It is not an official product of any commercial puzzle brand.
 
 ## How to run
@@ -37,6 +41,10 @@ Jul Aug Sep Oct Nov Dec  .
 For a chosen month, day, and weekday, those three cells stay uncovered. Place all 10 pieces so they cover the other 47 cells, do not overlap, and do not cover unused cells or the three date cells.
 
 On load, the board shows yesterday’s complete canonical solution in a locked preview, using the player’s local timezone (1 January wraps to 31 December). **Start today**, or changing the date picker, begins a fresh play for today or that date. The **Today** control is hidden during the preview; once play has started, it sits beside the date heading so you can jump back to today from another date. Dates use the local weekday (`Date#getDay()`, Sunday = 0). The date picker can load any month/day/weekday, including 29 Feb.
+
+If you have already started or finished a puzzle, a refresh restores that board, the timer, and the hint count from `localStorage` instead of returning to yesterday’s preview. The undo stack is still not persisted. Preview mode does not write a session.
+
+Playable dates are reflected in the URL as `?m=11&d=16&w=1` (month, day, and weekday). A link like `?date=2026-11-16` also works: it uses that local calendar date’s month, day, and weekday. The preview keeps a clean `/` with no query string. Changing the date updates the URL with `replaceState`, so you can share the current puzzle by copying the address.
 
 ## Piece set
 
@@ -79,7 +87,7 @@ On a desktop window (900px and up) the controls sit in a left sidebar (title, da
 
 On narrower screens the same controls are compacted at the top. As soon as the width can fit a readable board beside a narrow tray (from about 600px, and in landscape when height is limited), the play area is board | tray. Portrait phones may still need a little vertical scrolling if a readable board cannot share one screen with the chrome; landscape and desktop should not need a vertical scroll for the full UI. There is no horizontal page scroll at 375×667 or typical phone widths.
 
-Progress is stored only in `localStorage` under the key prefix `calendar-puzzle:` (daily streak, last solved local date, and best time plus hint count per month/day/weekday). A solve counts toward the daily streak only when the puzzle’s month, day, and weekday all match the real local today. Best times are keyed with the weekday (for example `11-15-0`). Older month/day-only keys from the previous 7×7 game are left in place and ignored. There is no account and no backend.
+Progress is stored only in `localStorage` under the key prefix `calendar-puzzle:` (the current play session, daily streak, last solved local date, and best time plus hint count per month/day/weekday). A solve counts toward the daily streak only when the puzzle’s month, day, and weekday all match the real local today. Best times are keyed with the weekday (for example `11-15-0`). Older month/day-only keys from the previous 7×7 game are left in place and ignored. There is no account and no backend.
 
 ## Solver and hint search order
 

@@ -18,7 +18,15 @@ import {
 } from './placement';
 import { type SolvedPiece, canonicalSolution } from './solver';
 import { type BestMap, formatTime } from './streak';
-import { loadProgress, saveSolve, bestFor } from './storage';
+import {
+  loadProgress,
+  saveSolve,
+  bestFor,
+  saveSession,
+  clearSession,
+  SESSION_VERSION,
+  type SessionState,
+} from './storage';
 
 export type PieceLocation = 'tray' | 'board';
 
@@ -66,6 +74,7 @@ export type GameOptions = {
   today?: () => Date;
   persist?: boolean;
   previewYesterday?: boolean;
+  session?: SessionState;
 };
 
 export function calendarParts(date: Date): { month: number; day: number; weekday: number } {
@@ -121,7 +130,11 @@ export class Game {
     this.today = options.today ?? (() => new Date());
     this.persist = options.persist !== false;
     this.reloadProgress();
-    if (options.previewYesterday) {
+    if (options.session) {
+      if (!this.applySession(options.session)) {
+        if (options.previewYesterday) this.showYesterdaySolution();
+      }
+    } else if (options.previewYesterday) {
       this.showYesterdaySolution();
     }
   }
@@ -238,10 +251,12 @@ export class Game {
     this.day = day;
     this.weekday = weekday;
     this.resetBoard();
+    this.persistSession();
   }
 
   reset(): void {
     this.resetBoard();
+    this.persistSession();
   }
 
   showYesterdaySolution(): void {
@@ -269,9 +284,89 @@ export class Game {
       piece.origin = { ...placed.origin };
     }
     this.selectedId = null;
+    if (this.persist) clearSession();
   }
 
-  private resetBoard(): void {
+  applySession(session: SessionState): boolean {
+    if (!this.sessionPlacementsLegal(session)) return false;
+    this.month = session.month;
+    this.day = session.day;
+    this.weekday = session.weekday;
+    this.mode = 'play';
+    this.pieces = this.clonePieces(session.pieces);
+    this.selectedId = session.solved ? null : session.selectedId;
+    this.hintsUsed = session.hintsUsed;
+    this.solved = false;
+    this.savedThisAttempt = false;
+    this.clearHistory();
+    this.resetTimer();
+    this.stoppedMs = Math.round(session.elapsedMs);
+    if (session.solved) {
+      this.solved = true;
+      this.savedThisAttempt = true;
+      this.selectedId = null;
+      return true;
+    }
+    if (session.timerRunning) {
+      if (typeof session.startedAt === 'number') {
+        this.timerRunning = true;
+        this.startedAt = session.startedAt;
+        this.stoppedMs = 0;
+      } else if (this.stoppedMs > 0) {
+        this.timerRunning = true;
+        this.startedAt = this.now() - this.stoppedMs;
+      }
+    }
+    if (this.isComplete()) this.checkWin();
+    return true;
+  }
+
+  private sessionPlacementsLegal(session: SessionState): boolean {
+    const blocked = dateMask(session.month, session.day, session.weekday);
+    const placements: Placement[] = [];
+    for (const piece of session.pieces) {
+      if (piece.location !== 'board' || !piece.origin) continue;
+      placements.push({
+        pieceId: piece.pieceId,
+        orientationIndex: piece.orientationIndex,
+        origin: { ...piece.origin },
+      });
+    }
+    for (const placed of placements) {
+      const cells = cellsOf(placed);
+      if (!isLegalPlacement(cells, occupancyMask(placements, placed.pieceId), blocked)) {
+        return false;
+      }
+    }
+    if (session.solved && !isSolved(placements, session.month, session.day, session.weekday)) {
+      return false;
+    }
+    return true;
+  }
+
+  private persistSession(): void {
+    if (!this.persist) return;
+    if (this.mode === 'preview') {
+      clearSession();
+      return;
+    }
+    saveSession({
+      version: SESSION_VERSION,
+      month: this.month,
+      day: this.day,
+      weekday: this.weekday,
+      pieces: this.clonePieces(this.pieces),
+      selectedId: this.selectedId,
+      hintsUsed: this.hintsUsed,
+      solved: this.solved,
+      elapsedMs: this.elapsedMs(),
+      timerRunning: this.timerRunning,
+      startedAt: this.timerRunning ? this.startedAt : null,
+      savedThisAttempt: this.savedThisAttempt,
+    });
+  }
+
+    private resetBoard(): void {
     this.mode = 'play';
     this.pieces = initialPieces();
     this.selectedId = null;
@@ -309,6 +404,7 @@ export class Game {
     this.pieces = this.clonePieces(entry.pieces);
     this.selectedId = entry.selectedId;
     this.hintsUsed = entry.hintsUsed;
+    this.persistSession();
   }
 
   select(id: PieceId | null): void {
@@ -336,6 +432,7 @@ export class Game {
     this.selectedId = id;
     this.startTimerIfNeeded();
     this.checkWin();
+    this.persistSession();
     return true;
   }
 
@@ -348,6 +445,7 @@ export class Game {
     }
     this.pushHistory();
     this.moveToTray(id);
+    this.persistSession();
   }
 
   private moveToTray(id: PieceId): void {
@@ -373,9 +471,11 @@ export class Game {
     this.startTimerIfNeeded();
     if (piece.location === 'tray') {
       piece.orientationIndex = found.orientationIndex;
+      this.persistSession();
       return;
     }
     this.applyTransform(piece, found.orientationIndex, current);
+    this.persistSession();
   }
 
   /** Horizontally mirror the selected piece. */
@@ -391,9 +491,11 @@ export class Game {
     this.startTimerIfNeeded();
     if (piece.location === 'tray') {
       piece.orientationIndex = found.orientationIndex;
+      this.persistSession();
       return;
     }
     this.applyTransform(piece, found.orientationIndex, current);
+    this.persistSession();
   }
 
   private applyTransform(piece: PieceState, orientationIndex: number, previousCells: Cell[]): void {
@@ -438,6 +540,7 @@ export class Game {
       this.bests = progress.best;
       this.savedThisAttempt = true;
     }
+    this.persistSession();
   }
 
   /**
@@ -459,6 +562,7 @@ export class Game {
       this.hintsUsed += 1;
       if (blocker) {
         this.moveToTray(blocker);
+        this.persistSession();
         return { action: 'returned', pieceId: blocker };
       }
 
@@ -467,6 +571,7 @@ export class Game {
       piece.origin = { ...target.origin };
       this.selectedId = piece.pieceId;
       this.checkWin();
+      this.persistSession();
       return { action: 'placed', pieceId: piece.pieceId };
     }
 
