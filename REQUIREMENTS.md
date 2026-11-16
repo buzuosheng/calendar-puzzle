@@ -2,7 +2,7 @@
 
 Product name: Calendar Puzzle
 Repository: https://github.com/buzuosheng/calendar-puzzle (public)
-Language: English only (UI, README, code comments)
+Language: English UI in the current build; a Simplified Chinese locale is planned (see Planned). README, requirements, and code comments stay in English.
 Stack: Vite + TypeScript + vanilla DOM (no React/Vue). Pure static frontend. No backend, no accounts, no analytics SDKs required.
 
 ## Game rules (locked)
@@ -74,14 +74,73 @@ Playable dates are shown in the URL as `?m=&d=&w=`. `?date=YYYY-MM-DD` is also a
 6. Reset button returns all pieces to the tray and restarts the timer for the same date.
 7. Keyboard: `R` rotate, `F` flip, `H` hint, `Ctrl+Z` / `Cmd+Z` undo, `Esc` deselect. The undo shortcut is ignored when the focus is in a select, when only `Z` is pressed, or when the board is locked. Pointer/touch must work on phone and desktop.
 8. Undo reverts the last committed change (successful place, return to tray, rotate, flip, or hint, including a hint that returns a blocker). It restores piece positions, selection, and `hintsUsed`, but not the timer, date, mode, streak, or best times. The stack is not persisted and is cleared on reset, Start today, and date changes. After a solve, Undo is disabled so a persisted win is never un-saved.
-9. Responsive layout: desktop (900px and up) uses a left control sidebar and a right play area (large board, narrower tray), targeted to fit one screen, including a typical 16-inch laptop viewport. Narrower screens compact the top chrome (Today beside the date heading; month and day on one row, weekday full width). The play area becomes board | tray as soon as width allows (from about 600px, and in landscape when height is limited). No horizontal page scroll at 375×667 and 1280×800. Portrait phones may still need a little vertical scrolling if a readable board cannot share one screen with the chrome; landscape and desktop should not need a vertical scroll for the full UI. Do not drop features on mobile.
-10. Visual: cool plaster desk page (`#E2E5DF`), stamp-red primary (`#8A2E2A`), IBM Plex Sans for chrome, and a serif board font on the board and title. Only the board and pieces are light maple, with no wood grain. The board is a full 8×7 rounded rectangle; unused cells stay unplayable under the recessed plaques. Pieces are one solid maple silhouette with a faint dashed internal grid, the same on the board and in the tray. High contrast labels. Not a clone of another site’s exact art. English labels: months `Jan`–`Dec`, days `1`–`31`, weekdays `Sun`–`Sat`. Title: “Calendar Puzzle”. Short how-to on the page.
+9. Responsive layout: desktop (900px and up) uses a left control sidebar and a right play area (large board, narrower tray), targeted to fit one screen, including a typical 16-inch laptop viewport. Narrower screens compact the top chrome (Today beside the date heading; month and day on one row, weekday full width). The play area becomes board | tray as soon as width allows (from about 600px, and in landscape when height is limited). No horizontal page scroll at 375×667 and 1280×800. The current portrait-phone layout may still need a little vertical scrolling; the Planned mobile adaptation tightens this. Do not drop features on mobile.
+10. Visual: cool plaster desk page (`#E2E5DF`), stamp-red primary (`#8A2E2A`), IBM Plex Sans for chrome, and a serif board font on the board and title. Only the board and pieces are light maple, with no wood grain. The board is a full 8×7 rounded rectangle; unused cells stay unplayable under the recessed plaques. Pieces are one solid maple silhouette with a faint dashed internal grid, the same on the board and in the tray. High contrast labels. Not a clone of another site’s exact art. Current English labels: months `Jan`–`Dec`, days `1`–`31`, weekdays `Sun`–`Sat`. Title: “Calendar Puzzle”. Short how-to on the page. Chinese labels are specified under Planned.
 11. Solver runs entirely in the browser (bitboard backtracking with precomputed placements). Fast enough that a first solution for any combination returns in well under 1 second on a typical laptop. Hints use a deterministic first solution so the same month/day/weekday always hints toward the same arrangement (search order is documented in the README and in `src/solver.ts`).
-12. The playable date is reflected in the URL (`?m=&d=&w=`, or `?date=YYYY-MM-DD`). Opening such a link starts or restores that date in play mode, not the yesterday preview. The live site is https://puzzle.buzuosheng.tech. The document has Open Graph / Twitter tags and a share image at `/og.png`.
+12. The playable date is reflected in the URL (`?m=&d=&w=`, or `?date=YYYY-MM-DD`). Opening such a link starts or restores that date in play mode, not the yesterday preview. The document has Open Graph / Twitter tags and a share image at `/og.png`.
+
+## Planned
+
+These items are not in the current build. Decisions below are locked so a later pass can implement them without new product questions.
+
+### Chinese language version
+
+Add a complete Simplified Chinese UI alongside the existing English UI.
+
+- Locales: `en` and `zh-Hans` only. Traditional Chinese is out of scope.
+- A visible language control in the chrome switches between **English** and **中文**. Switching updates all visible UI immediately and does not reset the board, timer, or session.
+- Persist the choice in `localStorage` under `calendar-puzzle:lang` (`en` | `zh-Hans`).
+- If there is no saved choice, default from the browser language: any `zh*` tag → `zh-Hans`, otherwise `en`.
+- Update `document.title` and the root `lang` attribute with the active locale. Static Open Graph / Twitter tags may stay in English.
+- Keyboard shortcuts (`R`, `F`, `H`, `Ctrl`/`⌘`+`Z`, `Esc`) stay the same in both locales.
+- Locked Simplified Chinese copy:
+
+  | English | Chinese |
+  |---|---|
+  | Calendar Puzzle | 日历拼图 |
+  | Today | 今天 |
+  | Start today | 开始今日挑战 |
+  | Month | 月份 |
+  | Day | 日 |
+  | Weekday | 星期 |
+  | Time | 用时 |
+  | Hints | 提示 |
+  | Streak | 连续 |
+  | Best | 最佳 |
+  | Rotate | 旋转 |
+  | Flip | 翻转 |
+  | Hint | 提示 |
+  | Undo | 撤销 |
+  | Reset | 重置 |
+  | Pieces | 木片 |
+  | Date | 日期 |
+  | Leave these open | 请留空 |
+  | Solved | 已完成 |
+  | Jan–Dec | 1月–12月 |
+  | Sun–Sat (board) | 日 一 二 三 四 五 六 |
+  | Sunday–Saturday (picker) | 星期日–星期六 |
+  | Sun, Nov 15 | 周日，11月15日 |
+
+  Play how-to: 将月份、日期和星期三个格子留空。拖动木片放置，或使用 R、F、H，以及 Ctrl/⌘+Z。
+
+  Preview how-to: 这是昨天的解答。准备好后，开始今日挑战。
+
+  Solved / best-time body: `用时 1:23 · 2 次提示` (same pattern as the English `Time 1:23 · 2 hints`).
+- Unit tests should cover locale resolution (saved preference wins; `zh*` defaults to Chinese; otherwise English) and that each locale exposes the locked labels above.
+
+### Mobile adaptation
+
+The current narrow layout is a starting point, not the finished phone experience.
+
+- Fit the full UI on one screen with no vertical or horizontal page scroll at common phone sizes, including 375×667 and 390×844 portrait, and the matching landscape sizes (667×375, 844×390). A readable board and the piece tray must both stay on screen.
+- Keep every feature available: date controls, stats, Start today / Today, rotate, flip, hint, undo, reset, and the language switch once it exists. Do not hide or drop controls on mobile.
+- Touch-first interaction: drag-and-snap must be reliable with a finger; rotate, flip, and other actions must not depend on hover. Hit targets should be at least 44px where the layout allows.
+- The tray keeps a minimum height when it is empty, as it already does on desktop.
+- The layout may differ from the desktop left sidebar; compactness must not make the chrome feel cramped or the board unreadable.
 
 ## Out of scope
 
-Accounts, backend, campaign/tutorial level packs, i18n, native apps, generated per-solve share images, online leaderboards, analytics.
+Accounts, backend, campaign/tutorial level packs, languages beyond English and Simplified Chinese, native apps, generated per-solve share images, online leaderboards, analytics.
 
 ## Engineering
 
@@ -96,19 +155,23 @@ Accounts, backend, campaign/tutorial level packs, i18n, native apps, generated p
   - streak logic around midnight / consecutive days (pure functions, injectable clock); a solve counts for “today” only when month+day+weekday match
   - a mid-play session is saved and restored with the timer still running; a solved session is restored without recording the streak again; preview does not write a session; Start today writes an empty play session; illegal sessions are ignored
   - URL parsing for `m`/`d`/`w` and `date=YYYY-MM-DD`; resolveStart prefers a matching session, otherwise a URL date, otherwise preview
-- README: how to run, rules, piece set, deploy notes (static, Vercel root = repo root, build command `npm run build`, output `dist`).
+- README: how to run, rules, piece set, and planned work. Do not include deployment instructions.
 - MIT license.
-- `vercel.json` records the static build output. No history-router; the app is served at `/`.
-- GitHub Actions CI on `main` and pull requests runs `npm test` and `npm run build`.
 
 ## Acceptance (done when all are true)
+
+Current build:
 
 1. `npm test` and `npm run build` pass.
 2. Opening the built site shows yesterday’s complete solution in a locked preview (local timezone), with Start today beginning a fresh playable 8×7 puzzle for today.
 3. A correct arrangement is accepted and the timer stops; an incomplete board is not marked solved.
 4. Hint places a valid piece toward a known solution; repeating hints can finish the puzzle.
 5. All 2,562 combinations are solvable per tests.
-6. Desktop and mobile layouts work as specified.
-7. English UI only; no leftover Chinese copy.
+6. The current desktop and narrow layouts work as specified under Features. The Planned mobile adaptation has its own acceptance below.
+
+When the Planned work is done, these are also true:
+
+7. The UI can be used entirely in English or entirely in Simplified Chinese, with the locked copy above, a working language switch, and the saved or browser-language default.
+8. The full UI fits on one screen with no page scrolling at 375×667 and 390×844 (portrait and landscape), touch dragging works, and no feature is missing on mobile.
 
 Do not ask the user to make product decisions. If something is ambiguous, pick the option that best matches this document and proceed.

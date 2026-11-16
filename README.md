@@ -1,12 +1,14 @@
 # Calendar Puzzle
 
-A pure-frontend, English-only daily calendar polyomino puzzle. Leave the month, the day, and the weekday uncovered, then fit all ten pieces on the remaining 47 squares. Pieces may be rotated and flipped.
+A pure-frontend daily calendar polyomino puzzle. Leave the month, the day, and the weekday uncovered, then fit all ten pieces on the remaining 47 squares. Pieces may be rotated and flipped.
 
 Play it online at [puzzle.buzuosheng.tech](https://puzzle.buzuosheng.tech).
 
 ![Calendar Puzzle](public/og.png)
 
 This is an original web implementation of the well-known weekday (DOTY-style) calendar puzzle: an 8×7 board with 50 playable cells. It is not an official product of any commercial puzzle brand.
+
+The current UI is English. A Chinese language version and a fuller mobile layout are planned; see [Planned](#planned).
 
 ## How to run
 
@@ -85,7 +87,7 @@ This set is known to have at least one solution for every one of the 366 × 7 = 
 
 On a desktop window (900px and up) the controls sit in a left sidebar (title, date heading and Today, month/day on one row and weekday below, stats, and actions) and the board plus a narrower piece tray sit on the right. The layout is meant to fit on one screen, including a typical 16-inch laptop viewport.
 
-On narrower screens the same controls are compacted at the top. As soon as the width can fit a readable board beside a narrow tray (from about 600px, and in landscape when height is limited), the play area is board | tray. Portrait phones may still need a little vertical scrolling if a readable board cannot share one screen with the chrome; landscape and desktop should not need a vertical scroll for the full UI. There is no horizontal page scroll at 375×667 or typical phone widths.
+On narrower screens the same controls are compacted at the top. As soon as the width can fit a readable board beside a narrow tray (from about 600px, and in landscape when height is limited), the play area is board | tray. The current portrait-phone layout may still need a little vertical scrolling; a fuller mobile adaptation is planned (see [Planned](#planned)). There is no horizontal page scroll at 375×667 or typical phone widths.
 
 Progress is stored only in `localStorage` under the key prefix `calendar-puzzle:` (the current play session, daily streak, last solved local date, and best time plus hint count per month/day/weekday). A solve counts toward the daily streak only when the puzzle’s month, day, and weekday all match the real local today. Best times are keyed with the weekday (for example `11-15-0`). Older month/day-only keys from the previous 7×7 game are left in place and ignored. There is no account and no backend.
 
@@ -99,20 +101,12 @@ Hints always use the **first** solution found under this fixed order, so the sam
 2. Try pieces in the order `V`, `T`, `Z`, `L`, `N`, `P`, `U`, `J`, `S`, `I`.
 3. For each piece, try precomputed placements that cover that cell, in generation order: unique orientations (unflipped then flipped; for each, rotations 0°, 90°, 180°, 270° clockwise, first-seen only), and for each orientation, origins in row-major order.
 
-## Deploy
+## Planned
 
-This is a static Vite site. There is no client-side history router; the app is served at `/`.
+These items are not in the current build. Detailed decisions are locked in [REQUIREMENTS.md](REQUIREMENTS.md).
 
-To deploy on Vercel:
-
-- Root directory: the repository root
-- Build command: `npm run build`
-- Output directory: `dist`
-- Framework preset: Other (or Vite)
-
-A minimal `vercel.json` records those settings. The same static `dist` output can also be served from any static host. `vite.config.ts` sets `base: './'` so relative asset paths work.
-
-GitHub Actions CI (`.github/workflows/ci.yml`) runs `npm test` and `npm run build` on `main` and on pull requests.
+- **Chinese language version.** Add a complete Simplified Chinese UI (title, rules, buttons, board labels, plaques, and messages) with a visible English / 中文 switch. Remember the choice in `localStorage`. If there is no saved choice, default to the browser language (`zh*` → Chinese, otherwise English).
+- **Mobile adaptation.** Fit the full game on a phone screen in portrait and landscape with no page scrolling at common sizes (including 375×667). Improve touch targets and piece dragging so every control stays usable; do not drop desktop features.
 
 ## License
 
